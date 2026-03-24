@@ -20,9 +20,11 @@ import { JwtAuthGuard } from "../common/guards/jwt-auth.guard";
 import { RolesGuard } from "../common/guards/roles.guard";
 import { AvailabilityService } from "./availability.service";
 import { CreateAppointmentSlotDto } from "./dto/create-appointment-slot.dto";
+import { CreateAvailabilityExceptionDto } from "./dto/create-availability-exception.dto";
 import { CreateAvailabilityRuleDto } from "./dto/create-availability-rule.dto";
 import { GenerateAppointmentSlotsDto } from "./dto/generate-appointment-slots.dto";
 import { ListSlotsQueryDto } from "./dto/list-slots-query.dto";
+import { UpdateAvailabilityExceptionDto } from "./dto/update-availability-exception.dto";
 import { UpdateAvailabilityRuleDto } from "./dto/update-availability-rule.dto";
 
 @ApiTags("availability")
@@ -78,6 +80,51 @@ export class AvailabilityController {
     @Req() request: Request,
   ) {
     return this.availabilityService.deleteRule(user.sub, ruleId, request);
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles("psychologist")
+  @Get("me/exceptions")
+  async listMyExceptions(@CurrentUser() user: JwtUser) {
+    return this.availabilityService.listMyExceptions(user.sub);
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles("psychologist")
+  @Post("me/exceptions")
+  async createException(
+    @CurrentUser() user: JwtUser,
+    @Body() dto: CreateAvailabilityExceptionDto,
+    @Req() request: Request,
+  ) {
+    return this.availabilityService.createException(user.sub, dto, request);
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles("psychologist")
+  @Patch("me/exceptions/:id")
+  async updateException(
+    @CurrentUser() user: JwtUser,
+    @Param("id", ParseUUIDPipe) exceptionId: string,
+    @Body() dto: UpdateAvailabilityExceptionDto,
+    @Req() request: Request,
+  ) {
+    return this.availabilityService.updateException(user.sub, exceptionId, dto, request);
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles("psychologist")
+  @Delete("me/exceptions/:id")
+  async deleteException(
+    @CurrentUser() user: JwtUser,
+    @Param("id", ParseUUIDPipe) exceptionId: string,
+    @Req() request: Request,
+  ) {
+    return this.availabilityService.deleteException(user.sub, exceptionId, request);
   }
 
   @ApiBearerAuth()

@@ -4,6 +4,7 @@ import {
   Prisma,
   PsychologistApprovalStatus,
   Weekday,
+  type AvailabilityException,
   type AvailabilityRule,
 } from "@prisma/client";
 import {
@@ -16,10 +17,13 @@ import { DateTime } from "luxon";
 import type { Request } from "express";
 import { AuditService } from "../audit/audit.service";
 import { PrismaService } from "../prisma/prisma.service";
+import { BookingSlotQueueService } from "./booking-slot-queue.service";
 import { CreateAppointmentSlotDto } from "./dto/create-appointment-slot.dto";
+import { CreateAvailabilityExceptionDto } from "./dto/create-availability-exception.dto";
 import { CreateAvailabilityRuleDto } from "./dto/create-availability-rule.dto";
 import { GenerateAppointmentSlotsDto } from "./dto/generate-appointment-slots.dto";
 import { ListSlotsQueryDto } from "./dto/list-slots-query.dto";
+import { UpdateAvailabilityExceptionDto } from "./dto/update-availability-exception.dto";
 import { UpdateAvailabilityRuleDto } from "./dto/update-availability-rule.dto";
 
 const ACTIVE_SLOT_STATUSES: AppointmentSlotStatus[] = [
@@ -54,11 +58,26 @@ type SlotRecord = Prisma.AppointmentSlotGetPayload<{
   select: typeof slotSelect;
 }>;
 
+const exceptionSelect = {
+  id: true,
+  startsAt: true,
+  endsAt: true,
+  reason: true,
+  isActive: true,
+  createdAt: true,
+  updatedAt: true,
+} satisfies Prisma.AvailabilityExceptionSelect;
+
+type ExceptionRecord = Prisma.AvailabilityExceptionGetPayload<{
+  select: typeof exceptionSelect;
+}>;
+
 @Injectable()
 export class AvailabilityService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
+    private readonly bookingSlotQueueService: BookingSlotQueueService,
   ) {}
 
   async listMyRules(userId: string) {
@@ -107,7 +126,78 @@ export class AvailabilityService {
       timezone: rule.timezone,
     });
 
+    if (rule.isActive) {
+      await this.bookingSlotQueueService.enqueueRebuild(userId, {
+        reason: "availability_rule_created",
+        requestedByUserId: userId,
+      });
+    }
+
     return this.serializeRule(rule);
+  }
+
+  async listMyExceptions(userId: string) {
+    await this.ensurePsychologistProfile(userId);
+
+    const exceptions = await this.prisma.availabilityException.findMany({
+      where: {
+        psychologistProfileId: userId,
+      },
+      orderBy: [{ startsAt: "asc" }, { endsAt: "asc" }],
+      select: exceptionSelect,
+    });
+
+    return exceptions.map((exception) => this.serializeException(exception));
+  }
+
+  async createException(
+    userId: string,
+    dto: CreateAvailabilityExceptionDto,
+    request: Request,
+  ) {
+    await this.ensurePsychologistProfile(userId);
+    const startsAt = DateTime.fromISO(dto.startsAt, { zone: "utc" });
+    const endsAt = DateTime.fromISO(dto.endsAt, { zone: "utc" });
+    const isActive = dto.isActive ?? true;
+
+    this.assertExceptionRange(startsAt, endsAt);
+
+    if (isActive) {
+      await this.assertExceptionCanBeApplied(userId, startsAt.toJSDate(), endsAt.toJSDate());
+    }
+
+    const exception = await this.prisma.availabilityException.create({
+      data: {
+        psychologistProfileId: userId,
+        startsAt: startsAt.toJSDate(),
+        endsAt: endsAt.toJSDate(),
+        reason: dto.reason?.trim() || null,
+        isActive,
+      },
+      select: exceptionSelect,
+    });
+
+    await this.logAudit(
+      request,
+      userId,
+      "availability_exceptions.create",
+      "availability_exception",
+      exception.id,
+      {
+        startsAt: exception.startsAt.toISOString(),
+        endsAt: exception.endsAt.toISOString(),
+        isActive: exception.isActive,
+      },
+    );
+
+    if (exception.isActive) {
+      await this.bookingSlotQueueService.enqueueRebuild(userId, {
+        reason: "availability_exception_created",
+        requestedByUserId: userId,
+      });
+    }
+
+    return this.serializeException(exception);
   }
 
   async updateRule(
@@ -153,6 +243,14 @@ export class AvailabilityService {
       fields: Object.keys(dto),
     });
 
+    const shouldRebuild = existing.isActive || dto.isActive === true;
+    if (shouldRebuild) {
+      await this.bookingSlotQueueService.enqueueRebuild(userId, {
+        reason: "availability_rule_updated",
+        requestedByUserId: userId,
+      });
+    }
+
     return this.serializeRule(updated);
   }
 
@@ -164,6 +262,7 @@ export class AvailabilityService {
       },
       select: {
         id: true,
+        isActive: true,
       },
     });
 
@@ -177,8 +276,131 @@ export class AvailabilityService {
 
     await this.logAudit(request, userId, "availability_rules.delete", "availability_rule", ruleId, null);
 
+    if (existing.isActive) {
+      await this.bookingSlotQueueService.enqueueRebuild(userId, {
+        reason: "availability_rule_deleted",
+        requestedByUserId: userId,
+      });
+    }
+
     return {
       id: ruleId,
+      deleted: true,
+    };
+  }
+
+  async updateException(
+    userId: string,
+    exceptionId: string,
+    dto: UpdateAvailabilityExceptionDto,
+    request: Request,
+  ) {
+    const existing = await this.prisma.availabilityException.findFirst({
+      where: {
+        id: exceptionId,
+        psychologistProfileId: userId,
+      },
+      select: exceptionSelect,
+    });
+
+    if (!existing) {
+      throw new NotFoundException("Исключение доступности не найдено");
+    }
+
+    const startsAt = dto.startsAt
+      ? DateTime.fromISO(dto.startsAt, { zone: "utc" })
+      : DateTime.fromJSDate(existing.startsAt, { zone: "utc" });
+    const endsAt = dto.endsAt
+      ? DateTime.fromISO(dto.endsAt, { zone: "utc" })
+      : DateTime.fromJSDate(existing.endsAt, { zone: "utc" });
+    const isActive = dto.isActive ?? existing.isActive;
+
+    this.assertExceptionRange(startsAt, endsAt);
+
+    if (isActive) {
+      await this.assertExceptionCanBeApplied(
+        userId,
+        startsAt.toJSDate(),
+        endsAt.toJSDate(),
+        exceptionId,
+      );
+    }
+
+    const updated = await this.prisma.availabilityException.update({
+      where: {
+        id: exceptionId,
+      },
+      data: {
+        startsAt: dto.startsAt ? startsAt.toJSDate() : undefined,
+        endsAt: dto.endsAt ? endsAt.toJSDate() : undefined,
+        reason: dto.reason === undefined ? undefined : dto.reason.trim() || null,
+        isActive: dto.isActive,
+      },
+      select: exceptionSelect,
+    });
+
+    await this.logAudit(
+      request,
+      userId,
+      "availability_exceptions.update",
+      "availability_exception",
+      updated.id,
+      {
+        fields: Object.keys(dto),
+      },
+    );
+
+    const shouldRebuild = existing.isActive || dto.isActive === true;
+    if (shouldRebuild) {
+      await this.bookingSlotQueueService.enqueueRebuild(userId, {
+        reason: "availability_exception_updated",
+        requestedByUserId: userId,
+      });
+    }
+
+    return this.serializeException(updated);
+  }
+
+  async deleteException(userId: string, exceptionId: string, request: Request) {
+    const existing = await this.prisma.availabilityException.findFirst({
+      where: {
+        id: exceptionId,
+        psychologistProfileId: userId,
+      },
+      select: {
+        id: true,
+        isActive: true,
+      },
+    });
+
+    if (!existing) {
+      throw new NotFoundException("Исключение доступности не найдено");
+    }
+
+    await this.prisma.availabilityException.delete({
+      where: {
+        id: exceptionId,
+      },
+    });
+
+    await this.logAudit(
+      request,
+      userId,
+      "availability_exceptions.delete",
+      "availability_exception",
+      exceptionId,
+      null,
+    );
+
+    if (existing.isActive) {
+      await this.bookingSlotQueueService.enqueueRebuild(userId, {
+        reason: "availability_exception_deleted",
+        requestedByUserId: userId,
+      });
+    }
+
+    return {
+      id: exceptionId,
       deleted: true,
     };
   }
@@ -225,6 +447,15 @@ export class AvailabilityService {
     const endsAt = DateTime.fromISO(dto.endsAt, { zone: "utc" });
 
     this.assertSlotRange(startsAt, endsAt);
+
+    const overlappingException = await this.findActiveExceptionOverlap(
+      userId,
+      startsAt.toJSDate(),
+      endsAt.toJSDate(),
+    );
+    if (overlappingException) {
+      throw new ConflictException("Слот пересекается с активным исключением доступности");
+    }
 
     const overlap = await this.findActiveOverlap(userId, startsAt.toJSDate(), endsAt.toJSDate());
     if (overlap) {
@@ -335,11 +566,36 @@ export class AvailabilityService {
         endsAt: true,
       },
     });
+    const activeExceptions = await this.prisma.availabilityException.findMany({
+      where: {
+        psychologistProfileId: userId,
+        isActive: true,
+        startsAt: {
+          lt: utcRange.endUtc.toJSDate(),
+        },
+        endsAt: {
+          gt: utcRange.startUtc.toJSDate(),
+        },
+      },
+      orderBy: {
+        startsAt: "asc",
+      },
+      select: {
+        startsAt: true,
+        endsAt: true,
+      },
+    });
 
-    const intervals = existingSlots.map((slot) => ({
-      startsAt: slot.startsAt,
-      endsAt: slot.endsAt,
-    }));
+    const intervals = [
+      ...existingSlots.map((slot) => ({
+        startsAt: slot.startsAt,
+        endsAt: slot.endsAt,
+      })),
+      ...activeExceptions.map((exception) => ({
+        startsAt: exception.startsAt,
+        endsAt: exception.endsAt,
+      })),
+    ];
 
     const nowUtc = DateTime.utc();
     const toCreate: Prisma.AppointmentSlotCreateManyInput[] = [];
@@ -507,6 +763,78 @@ export class AvailabilityService {
     });
   }
 
+  private async findActiveExceptionOverlap(
+    userId: string,
+    startsAt: Date,
+    endsAt: Date,
+    excludeId?: string,
+  ) {
+    return this.prisma.availabilityException.findFirst({
+      where: {
+        psychologistProfileId: userId,
+        isActive: true,
+        ...(excludeId ? { NOT: { id: excludeId } } : {}),
+        startsAt: {
+          lt: endsAt,
+        },
+        endsAt: {
+          gt: startsAt,
+        },
+      },
+      select: {
+        id: true,
+      },
+    });
+  }
+
+  private async findBlockedSlotOverlapForException(userId: string, startsAt: Date, endsAt: Date) {
+    return this.prisma.appointmentSlot.findFirst({
+      where: {
+        psychologistProfileId: userId,
+        status: {
+          in: ACTIVE_SLOT_STATUSES,
+        },
+        startsAt: {
+          lt: endsAt,
+        },
+        endsAt: {
+          gt: startsAt,
+        },
+        NOT: {
+          source: AppointmentSlotSource.generated,
+          status: AppointmentSlotStatus.open,
+        },
+      },
+      select: {
+        id: true,
+      },
+    });
+  }
+
+  private async assertExceptionCanBeApplied(
+    userId: string,
+    startsAt: Date,
+    endsAt: Date,
+    excludeExceptionId?: string,
+  ) {
+    const overlappingException = await this.findActiveExceptionOverlap(
+      userId,
+      startsAt,
+      endsAt,
+      excludeExceptionId,
+    );
+    if (overlappingException) {
+      throw new ConflictException("Исключение пересекается с другим активным исключением");
+    }
+
+    const overlappingSlot = await this.findBlockedSlotOverlapForException(userId, startsAt, endsAt);
+    if (overlappingSlot) {
+      throw new ConflictException(
+        "Исключение пересекается с активным ручным, удерживаемым или забронированным слотом",
+      );
+    }
+  }
+
   private resolveQueryRange(
     query: ListSlotsQueryDto,
     options: { defaultDays: number; maxDays: number; defaultTimezone: string },
@@ -640,6 +968,20 @@ export class AvailabilityService {
     }
   }
 
+  private assertExceptionRange(startsAt: DateTime, endsAt: DateTime) {
+    if (!startsAt.isValid || !endsAt.isValid) {
+      throw new BadRequestException("Некорректные временные метки исключения");
+    }
+
+    if (endsAt <= startsAt) {
+      throw new BadRequestException("Время окончания исключения должно быть больше времени начала");
+    }
+
+    if (endsAt <= DateTime.utc()) {
+      throw new BadRequestException("Нельзя создать исключение, которое уже полностью прошло");
+    }
+  }
+
   private serializeRule(rule: AvailabilityRule) {
     return {
       id: rule.id,
@@ -652,6 +994,18 @@ export class AvailabilityService {
       isActive: rule.isActive,
       createdAt: rule.createdAt.toISOString(),
       updatedAt: rule.updatedAt.toISOString(),
+    };
+  }
+
+  private serializeException(exception: ExceptionRecord | AvailabilityException) {
+    return {
+      id: exception.id,
+      startsAt: exception.startsAt.toISOString(),
+      endsAt: exception.endsAt.toISOString(),
+      reason: exception.reason ?? null,
+      isActive: exception.isActive,
+      createdAt: exception.createdAt.toISOString(),
+      updatedAt: exception.updatedAt.toISOString(),
     };
   }
 
