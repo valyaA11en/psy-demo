@@ -17,7 +17,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
 
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
     let code = "INTERNAL_SERVER_ERROR";
-    let message = "Unexpected error";
+    let message = "Непредвиденная ошибка";
     let details: unknown = null;
 
     if (exception instanceof HttpException) {
@@ -35,7 +35,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
     } else if (exception instanceof Prisma.PrismaClientKnownRequestError) {
       status = HttpStatus.CONFLICT;
       code = exception.code;
-      message = "Database constraint error";
+      message = "Ошибка ограничения базы данных";
       details = exception.meta ?? null;
     } else if (exception instanceof Error) {
       message = exception.message;

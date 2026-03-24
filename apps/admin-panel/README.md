@@ -1,3 +1,49 @@
-# admin-panel
+# Admin Panel
 
-Laravel backoffice for moderation, complaints, users, payments, and audit workflows.
+Laravel-админка для модерации и операционной поддержки.
+
+## Scope
+
+- вход администратора и суперадмина
+- управление пользователями и блокировками
+- очередь модерации психологов
+- обработка жалоб
+- обзор оплат
+- просмотр audit log
+
+Панель использует общую PostgreSQL-схему, созданную `apps/api-core`. Laravel не создаёт отдельные таблицы пользователей и бронирований для этого домена.
+
+## Локальный запуск
+
+```bash
+composer install
+cp .env.example .env
+php artisan key:generate
+php artisan serve --host=0.0.0.0 --port=9000
+```
+
+Откройте `http://localhost:9000/admin/login`, если панель запущена напрямую, или `http://localhost/admin/login`, если она идёт через корневой `nginx`.
+
+Если общая база была заполнена через `apps/api-core`, используйте:
+
+- `admin@example.com`
+- `Admin12345!`
+
+## Переменные окружения
+
+Обязательные переменные:
+
+- `APP_KEY`
+- `APP_URL`
+- `DB_CONNECTION=pgsql`
+- `DB_HOST`
+- `DB_PORT`
+- `DB_DATABASE`
+- `DB_USERNAME`
+- `DB_PASSWORD`
+
+## Примечания
+
+- админские сессии изолированы от публичного web-приложения
+- аудит хранит hash IP и user-agent вместо сырых значений
+- UI намеренно не показывает чувствительные клиентские данные без операционной необходимости

@@ -1,15 +1,15 @@
-# Contributing
+# Contribution Guide
 
-## Branching
+## Ветвление
 
-- `main`: protected branch
-- feature branches: `feat/<scope>`
-- fix branches: `fix/<scope>`
-- docs branches: `docs/<scope>`
+- `main`: защищённая ветка
+- feature-ветки: `feat/<scope>`
+- fix-ветки: `fix/<scope>`
+- docs-ветки: `docs/<scope>`
 
-## Commit style
+## Стиль коммитов
 
-Use Conventional Commits:
+Используем Conventional Commits:
 
 - `feat: add booking creation endpoint`
 - `fix: enforce ownership check for consultation details`
@@ -17,15 +17,15 @@ Use Conventional Commits:
 
 ## Pull requests
 
-- small, focused PRs
-- link issue or task
-- include test notes
-- include security impact if auth/data access changed
+- небольшие и сфокусированные PR
+- ссылка на issue или задачу
+- заметки о проверках и тестах
+- отдельная пометка о security impact, если менялись auth, доступ или чувствительные данные
 
-## Required before merge
+## Обязательно перед merge
 
-- lint passes
-- tests pass
-- migrations reviewed
-- API/docs updated if contract changed
-- security-sensitive changes reviewed explicitly
+- lint проходит
+- тесты проходят
+- миграции просмотрены
+- API и документация обновлены, если поменялся контракт
+- security-sensitive изменения отдельно проверены

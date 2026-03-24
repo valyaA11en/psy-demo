@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { startTransition, useEffect, useEffectEvent, useState } from "react";
+import { io } from "socket.io-client";
 import { useAuth } from "@/components/auth-provider";
 import { PaymentActions } from "@/components/payment-actions";
 import { formatCompactDateTime, formatDateRange, formatMoney, humanizeCode } from "@/lib/format";
@@ -11,15 +12,18 @@ import type {
   DashboardBooking,
   PaymentListResponse,
   PaymentRecord,
+  RealtimeDomainEvent,
 } from "@/lib/types";
 
 export function DashboardClient() {
-  const { ready, user, request } = useAuth();
+  const { ready, accessToken, user, request } = useAuth();
   const [profile, setProfile] = useState<AuthUser | null>(null);
   const [bookings, setBookings] = useState<DashboardBooking[]>([]);
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [realtimeState, setRealtimeState] = useState<"idle" | "connecting" | "connected" | "offline">("idle");
+  const [realtimeEvents, setRealtimeEvents] = useState<RealtimeDomainEvent[]>([]);
 
   const loadData = useEffectEvent(async () => {
     if (!user) {
@@ -54,7 +58,7 @@ export function DashboardClient() {
       setBookings([]);
       setPayments([]);
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "Failed to load dashboard");
+      setError(nextError instanceof Error ? nextError.message : "Не удалось загрузить кабинет");
     } finally {
       setLoading(false);
     }
@@ -70,20 +74,62 @@ export function DashboardClient() {
     });
   }, [ready, user]);
 
+  useEffect(() => {
+    if (!ready || !user || !accessToken) {
+      setRealtimeState(user ? "offline" : "idle");
+      return;
+    }
+
+    const socket = io(process.env.NEXT_PUBLIC_WS_URL ?? "http://localhost:4001", {
+      path: "/ws/socket.io",
+      transports: ["websocket"],
+      auth: {
+        token: accessToken,
+      },
+    });
+
+    setRealtimeState("connecting");
+
+    socket.on("connect", () => {
+      setRealtimeState("connected");
+    });
+
+    socket.on("disconnect", () => {
+      setRealtimeState("offline");
+    });
+
+    socket.on("domain_event", (event: RealtimeDomainEvent) => {
+      setRealtimeEvents((current) => [event, ...current].slice(0, 5));
+      void loadData();
+    });
+
+    socket.on("ws.expired", () => {
+      setRealtimeState("offline");
+    });
+
+    socket.on("connect_error", () => {
+      setRealtimeState("offline");
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [ready, user, accessToken]);
+
   if (!ready) {
-    return <section className="page">Checking session...</section>;
+    return <section className="page">Проверяем сессию...</section>;
   }
 
   if (!user) {
     return (
       <section className="page empty-state">
-        <h1 className="section-title">Sign in to open your dashboard</h1>
+        <h1 className="section-title">Войдите, чтобы открыть кабинет</h1>
         <p className="section-text">
-          The dashboard connects to the current `api-core` and shows bookings, mock payments, and
-          session access.
+          Кабинет подключён к текущему `api-core` и показывает бронирования, тестовые оплаты и
+          доступ к сессии.
         </p>
         <Link className="button button-primary" href="/auth">
-          open auth
+          открыть вход
         </Link>
       </section>
     );
@@ -93,14 +139,14 @@ export function DashboardClient() {
     <section className="page stack">
       <div className="section-head">
         <div>
-          <p className="caption">Personal workspace</p>
-          <h1 className="section-title">Dashboard</h1>
+          <p className="caption">Личное пространство</p>
+          <h1 className="section-title">Кабинет</h1>
           <p className="section-text">
-            Role-sensitive overview for <strong>{user.email}</strong>.
+            Данные с учётом роли для <strong>{user.email}</strong>.
           </p>
         </div>
         <button className="button button-secondary" onClick={() => void loadData()} type="button">
-          refresh
+          обновить
         </button>
       </div>
 
@@ -108,48 +154,52 @@ export function DashboardClient() {
 
       <div className="summary-grid">
         <div className="summary-card">
-          <span className="caption">roles</span>
-          <strong>{user.roles.join(", ")}</strong>
+          <span className="caption">роли</span>
+          <strong>{user.roles.map(humanizeCode).join(", ")}</strong>
         </div>
         <div className="summary-card">
-          <span className="caption">bookings</span>
+          <span className="caption">бронирования</span>
           <strong>{bookings.length}</strong>
         </div>
         <div className="summary-card">
-          <span className="caption">payments</span>
+          <span className="caption">платежи</span>
           <strong>{payments.length}</strong>
         </div>
         <div className="summary-card">
-          <span className="caption">profile</span>
+          <span className="caption">профиль</span>
           <strong>
             {profile?.clientProfile?.displayName ??
               profile?.psychologistProfile?.publicSlug ??
-              "available"}
+              "доступен"}
           </strong>
+        </div>
+        <div className="summary-card">
+          <span className="caption">realtime</span>
+          <strong>{humanizeCode(realtimeState)}</strong>
         </div>
       </div>
 
       {loading ? (
-        <div className="surface">Loading dashboard data...</div>
+        <div className="surface">Загружаем данные кабинета...</div>
       ) : (
         <div className="dashboard-grid">
           <div className="stack">
             <div className="section-head">
               <div>
-                <h2 className="section-title">Consultations</h2>
+                <h2 className="section-title">Консультации</h2>
                 <p className="section-text">
                   {user.roles.includes("client")
-                    ? "Booking, payment and session flow for the client account."
-                    : "Upcoming consultations visible to the psychologist account."}
+                    ? "Запись, оплата и доступ к сессии для клиентского аккаунта."
+                    : "Предстоящие консультации, доступные аккаунту психолога."}
                 </p>
               </div>
             </div>
 
             {bookings.length === 0 ? (
               <div className="surface empty-state">
-                <p className="section-text">No consultations yet.</p>
+                <p className="section-text">Консультаций пока нет.</p>
                 <Link className="button button-primary" href="/">
-                  browse psychologists
+                  выбрать психолога
                 </Link>
               </div>
             ) : (
@@ -158,7 +208,7 @@ export function DashboardClient() {
                   <div className="booking-head">
                     <div>
                       <h3 className="card-title">
-                        {booking.psychologist?.fullName ?? booking.client?.displayName ?? "Consultation"}
+                        {booking.psychologist?.fullName ?? booking.client?.displayName ?? "Консультация"}
                       </h3>
                       <p className="section-text">{formatDateRange(booking.slot.startsAt, booking.slot.endsAt)}</p>
                     </div>
@@ -166,13 +216,13 @@ export function DashboardClient() {
                   </div>
 
                   <div className="meta-row">
-                    <span>slot status: {humanizeCode(booking.slot.status)}</span>
-                    <span>created: {formatCompactDateTime(booking.createdAt)}</span>
+                    <span>статус слота: {humanizeCode(booking.slot.status)}</span>
+                    <span>создано: {formatCompactDateTime(booking.createdAt)}</span>
                   </div>
 
                   {booking.clientMessage ? (
                     <div className="surface surface-muted">
-                      <p className="caption">client message</p>
+                      <p className="caption">сообщение клиента</p>
                       <p className="section-text">{booking.clientMessage}</p>
                     </div>
                   ) : null}
@@ -184,12 +234,12 @@ export function DashboardClient() {
                   {booking.latestPayment ? (
                     <div className="meta-row">
                       <span>
-                        latest payment: {humanizeCode(booking.latestPayment.status)} /{" "}
+                        последний платёж: {humanizeCode(booking.latestPayment.status)} /{" "}
                         {formatMoney(booking.latestPayment.amount, booking.latestPayment.currency)}
                       </span>
                       {booking.latestPayment.status === "succeeded" ? (
                         <Link className="muted-link" href={`/session/${booking.id}`}>
-                          open session page
+                          открыть страницу сессии
                         </Link>
                       ) : null}
                     </div>
@@ -201,18 +251,18 @@ export function DashboardClient() {
 
           <aside className="stack">
             <div className="surface">
-              <p className="caption">Current account</p>
+              <p className="caption">Текущий аккаунт</p>
               <h3 className="card-title">{profile?.email ?? user.email}</h3>
               <ul className="list-block">
-                <li>roles: {user.roles.join(", ")}</li>
-                <li>timezone: {profile?.clientProfile?.timezone ?? "not set"}</li>
-                <li>public slug: {profile?.psychologistProfile?.publicSlug ?? "not applicable"}</li>
+                <li>роли: {user.roles.map(humanizeCode).join(", ")}</li>
+                <li>часовой пояс: {profile?.clientProfile?.timezone ?? "не указан"}</li>
+                <li>публичный адрес профиля: {profile?.psychologistProfile?.publicSlug ?? "не применяется"}</li>
               </ul>
             </div>
 
             {payments.length > 0 ? (
               <div className="surface">
-                <p className="caption">Recent payments</p>
+                <p className="caption">Последние платежи</p>
                 <div className="stack compact-stack">
                   {payments.slice(0, 5).map((payment) => (
                     <div className="surface surface-muted" key={payment.id}>
@@ -225,7 +275,7 @@ export function DashboardClient() {
                       <div className="meta-row">
                         <span>{formatCompactDateTime(payment.createdAt)}</span>
                         <Link className="muted-link" href={`/session/${payment.consultationId}`}>
-                          session page
+                          страница сессии
                         </Link>
                       </div>
                     </div>
@@ -233,6 +283,28 @@ export function DashboardClient() {
                 </div>
               </div>
             ) : null}
+
+            <div className="surface">
+              <p className="caption">Realtime-активность</p>
+              {realtimeEvents.length === 0 ? (
+                <p className="section-text">Пока не получено ни одного события в реальном времени.</p>
+              ) : (
+                <div className="stack compact-stack">
+                  {realtimeEvents.map((event) => (
+                    <div className="surface surface-muted" key={event.id}>
+                      <div className="meta-row">
+                        <strong>{humanizeCode(event.name)}</strong>
+                        <span>{formatCompactDateTime(event.occurredAt)}</span>
+                      </div>
+                      <div className="meta-row">
+                        <span>сущность: {humanizeCode(event.entity.type)}</span>
+                        <span>{event.payload.status ? humanizeCode(event.payload.status) : "требуется обновление"}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </aside>
         </div>
       )}

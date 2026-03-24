@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BookingActions } from "@/components/booking-actions";
-import { formatDateTime, formatMoney } from "@/lib/format";
+import { formatDateTime, formatMoney, humanizeCode } from "@/lib/format";
 import { getPsychologist, getPsychologistSlots } from "@/lib/server-api";
 
 type PsychologistPageProps = {
@@ -23,34 +23,34 @@ export default async function PsychologistPage({ params }: PsychologistPageProps
       <section className="page stack page-detail">
         <div className="profile-hero surface">
           <div className="profile-copy stack">
-            <p className="caption">Verified public profile</p>
+            <p className="caption">Проверенный публичный профиль</p>
             <h1 className="display-title">{psychologist.fullName}</h1>
             <p className="section-text section-text-large">
-              {psychologist.publicTitle ?? "Licensed psychologist"}
+              {psychologist.publicTitle ?? "Практикующий психолог"}
             </p>
-            <p className="section-text">{psychologist.bio ?? "Profile description will be added by the psychologist."}</p>
+            <p className="section-text">{psychologist.bio ?? "Описание профиля будет добавлено психологом."}</p>
           </div>
 
           <div className="profile-side stack">
             <div className="price-pill">
               {psychologist.priceFrom
                 ? formatMoney(psychologist.priceFrom)
-                : "Price on request"}
+                : "Цена по запросу"}
             </div>
             <div className="meta-card">
-              <span>experience</span>
-              <strong>{psychologist.experienceYears} years</strong>
+              <span>опыт</span>
+              <strong>{psychologist.experienceYears} лет</strong>
             </div>
             <div className="meta-card">
-              <span>languages</span>
-              <strong>{psychologist.languages.join(", ") || "not specified"}</strong>
+              <span>языки</span>
+              <strong>{psychologist.languages.map(humanizeCode).join(", ") || "не указано"}</strong>
             </div>
             <div className="meta-card">
-              <span>next slot</span>
+              <span>ближайший слот</span>
               <strong>
                 {psychologist.nextAvailableAt
                   ? formatDateTime(psychologist.nextAvailableAt)
-                  : "no slot published"}
+                  : "слоты не опубликованы"}
               </strong>
             </div>
           </div>
@@ -60,8 +60,8 @@ export default async function PsychologistPage({ params }: PsychologistPageProps
           <div className="stack">
             <div className="surface stack">
               <div>
-                <p className="caption">Approach</p>
-                <h2 className="section-title">Public information only</h2>
+                <p className="caption">Подход</p>
+                <h2 className="section-title">Только публичная информация</h2>
               </div>
 
               <div className="tag-row">
@@ -72,26 +72,26 @@ export default async function PsychologistPage({ params }: PsychologistPageProps
                 ))}
                 {psychologist.formats.map((format) => (
                   <span className="tag tag-soft" key={format}>
-                    {format}
+                    {humanizeCode(format)}
                   </span>
                 ))}
               </div>
 
               <ul className="list-block">
-                <li>Average rating: {psychologist.ratingAvg.toFixed(1)}</li>
-                <li>Reviews: {psychologist.reviewsCount}</li>
-                <li>Formats: {psychologist.formats.join(", ") || "not specified"}</li>
-                <li>Only non-sensitive public profile fields are shown on this page.</li>
+                <li>Средний рейтинг: {psychologist.ratingAvg.toFixed(1)}</li>
+                <li>Отзывы: {psychologist.reviewsCount}</li>
+                <li>Форматы: {psychologist.formats.map(humanizeCode).join(", ") || "не указано"}</li>
+                <li>На этой странице показываются только неперсональные публичные поля профиля.</li>
               </ul>
             </div>
 
             <div className="surface stack">
               <div>
-                <p className="caption">Booking flow</p>
-                <h2 className="section-title">Choose a published slot</h2>
+                <p className="caption">Запись</p>
+                <h2 className="section-title">Выберите опубликованный слот</h2>
               </div>
               <p className="section-text">
-                Booking creates a consultation, then payment is completed in the dashboard using the mock checkout flow.
+                После выбора слота создаётся консультация, а оплату можно провести в кабинете через тестовый сценарий оплаты.
               </p>
               <BookingActions psychologistName={psychologist.fullName} slots={slotsResponse.items} />
             </div>
@@ -99,20 +99,20 @@ export default async function PsychologistPage({ params }: PsychologistPageProps
 
           <aside className="stack">
             <div className="surface stack">
-              <p className="caption">Privacy note</p>
+              <p className="caption">Замечание о приватности</p>
               <p className="section-text">
-                The client will share only the minimum required data for scheduling and communication.
+                Клиент передаёт только минимально необходимые данные для записи и коммуникации.
               </p>
             </div>
 
             <div className="surface stack">
-              <p className="caption">Navigation</p>
+              <p className="caption">Навигация</p>
               <div className="inline-actions">
                 <Link className="button button-primary" href="/dashboard">
-                  dashboard
+                  кабинет
                 </Link>
                 <Link className="button button-ghost" href="/">
-                  back to catalog
+                  вернуться в каталог
                 </Link>
               </div>
             </div>

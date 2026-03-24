@@ -1,16 +1,16 @@
-## Summary
+## Кратко
 
-- what changed
-- why it changed
+- что изменилось
+- зачем это изменилось
 
 ## Checklist
 
-- [ ] tests added or updated
-- [ ] docs updated
-- [ ] migrations reviewed
-- [ ] security impact considered
-- [ ] no secrets committed
+- [ ] тесты добавлены или обновлены
+- [ ] документация обновлена
+- [ ] миграции просмотрены
+- [ ] влияние на безопасность учтено
+- [ ] секреты не закоммичены
 
-## Notes
+## Примечания
 
-- rollout or follow-up items
+- rollout, ограничения или follow-up задачи

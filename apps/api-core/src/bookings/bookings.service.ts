@@ -15,6 +15,7 @@ import { DateTime } from "luxon";
 import type { Request } from "express";
 import { AuditService } from "../audit/audit.service";
 import { PrismaService } from "../prisma/prisma.service";
+import { RealtimeService } from "../realtime/realtime.service";
 import { CancelBookingDto } from "./dto/cancel-booking.dto";
 import { CreateBookingDto } from "./dto/create-booking.dto";
 import { ListBookingsQueryDto } from "./dto/list-bookings-query.dto";
@@ -105,6 +106,7 @@ export class BookingsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
+    private readonly realtimeService: RealtimeService,
   ) {}
 
   async createBooking(
@@ -138,23 +140,23 @@ export class BookingsService {
         });
 
         if (!slot) {
-          throw new NotFoundException("Appointment slot not found");
+          throw new NotFoundException("Слот записи не найден");
         }
 
         if (slot.status !== AppointmentSlotStatus.open) {
-          throw new ConflictException("Appointment slot is no longer available");
+          throw new ConflictException("Слот записи больше недоступен");
         }
 
         if (slot.psychologistProfile.approvalStatus !== PsychologistApprovalStatus.approved) {
-          throw new ConflictException("Psychologist is not available for booking");
+          throw new ConflictException("Психолог недоступен для записи");
         }
 
         if (slot.startsAt <= new Date()) {
-          throw new BadRequestException("Cannot book a slot in the past");
+          throw new BadRequestException("Нельзя забронировать слот в прошлом");
         }
 
         if (slot.psychologistProfile.userId === clientUserId) {
-          throw new ForbiddenException("Cannot book your own psychologist slot");
+          throw new ForbiddenException("Нельзя забронировать собственный слот психолога");
         }
 
         const overlapping = await tx.consultation.findFirst({
@@ -178,7 +180,7 @@ export class BookingsService {
         });
 
         if (overlapping) {
-          throw new ConflictException("Client already has an overlapping consultation");
+          throw new ConflictException("У клиента уже есть пересекающаяся консультация");
         }
 
         const updated = await tx.appointmentSlot.updateMany({
@@ -192,7 +194,7 @@ export class BookingsService {
         });
 
         if (updated.count !== 1) {
-          throw new ConflictException("Appointment slot is no longer available");
+          throw new ConflictException("Слот записи больше недоступен");
         }
 
         const consultation = await tx.consultation.create({
@@ -239,6 +241,21 @@ export class BookingsService {
           slotId: dto.slotId,
           psychologistUserId: created.psychologistUserId,
           scheduledAt: created.scheduledAt.toISOString(),
+        },
+      });
+
+      await this.realtimeService.publishSafe({
+        name: "booking.created",
+        entity: {
+          type: "consultation",
+          id: consultationId,
+        },
+        audience: {
+          userIds: [clientUserId, created.psychologistUserId],
+        },
+        payload: {
+          consultationId,
+          status: created.status,
         },
       });
 
@@ -292,7 +309,7 @@ export class BookingsService {
     const actorRole = this.resolveActorRole(booking, actorUserId, roles);
 
     if (booking.status !== ConsultationStatus.scheduled) {
-      throw new ConflictException("Only scheduled consultations can be cancelled");
+      throw new ConflictException("Отменять можно только запланированные консультации");
     }
 
     const targetStatus = this.resolveCancellationStatus(actorRole);
@@ -353,6 +370,22 @@ export class BookingsService {
     });
 
     const updated = await this.getBookingRecord(bookingId, true);
+    await this.realtimeService.publishSafe({
+      name: "booking.cancelled",
+      entity: {
+        type: "consultation",
+        id: bookingId,
+      },
+      audience: {
+        userIds: [updated.clientUserId, updated.psychologistUserId],
+      },
+      payload: {
+        consultationId: bookingId,
+        status: updated.status,
+        reasonCode,
+      },
+    });
+
     return this.serializeBooking(updated, this.resolveView(updated, actorUserId, roles), true);
   }
 
@@ -366,11 +399,11 @@ export class BookingsService {
     const actorRole = this.resolveCompleteActorRole(booking, actorUserId, roles);
 
     if (booking.status !== ConsultationStatus.scheduled) {
-      throw new ConflictException("Only scheduled consultations can be completed");
+      throw new ConflictException("Завершать можно только запланированные консультации");
     }
 
     if (booking.slot.endsAt > new Date()) {
-      throw new ConflictException("Consultation cannot be completed before the slot end time");
+      throw new ConflictException("Консультацию нельзя завершить до окончания слота");
     }
 
     await this.prisma.$transaction(async (tx) => {
@@ -410,6 +443,21 @@ export class BookingsService {
     });
 
     const updated = await this.getBookingRecord(bookingId, true);
+    await this.realtimeService.publishSafe({
+      name: "booking.completed",
+      entity: {
+        type: "consultation",
+        id: bookingId,
+      },
+      audience: {
+        userIds: [updated.clientUserId, updated.psychologistUserId],
+      },
+      payload: {
+        consultationId: bookingId,
+        status: updated.status,
+      },
+    });
+
     return this.serializeBooking(updated, this.resolveView(updated, actorUserId, roles), true);
   }
 
@@ -476,7 +524,7 @@ export class BookingsService {
     });
 
     if (!profile) {
-      throw new ForbiddenException("Client profile not found");
+      throw new ForbiddenException("Профиль клиента не найден");
     }
 
     return profile;
@@ -501,7 +549,7 @@ export class BookingsService {
     });
 
     if (!booking) {
-      throw new NotFoundException("Booking not found");
+      throw new NotFoundException("Бронирование не найдено");
     }
 
     return booking;
@@ -520,7 +568,7 @@ export class BookingsService {
       return "admin";
     }
 
-    throw new ForbiddenException("You do not have access to this booking");
+    throw new ForbiddenException("У вас нет доступа к этому бронированию");
   }
 
   private resolveActorRole(booking: BookingListRecord, actorUserId: string, roles: string[]) {
@@ -540,7 +588,7 @@ export class BookingsService {
       return "admin";
     }
 
-    throw new ForbiddenException("You do not have access to this booking");
+    throw new ForbiddenException("У вас нет доступа к этому бронированию");
   }
 
   private resolveCompleteActorRole(booking: BookingListRecord, actorUserId: string, roles: string[]) {
@@ -556,7 +604,7 @@ export class BookingsService {
       return "admin";
     }
 
-    throw new ForbiddenException("Only the psychologist or admin can complete the consultation");
+    throw new ForbiddenException("Только психолог или администратор может завершить консультацию");
   }
 
   private resolveCancellationStatus(actorRole: string) {
@@ -569,7 +617,7 @@ export class BookingsService {
       case "superadmin":
         return ConsultationStatus.cancelled_by_admin;
       default:
-        throw new ForbiddenException("Unsupported actor role");
+        throw new ForbiddenException("Неподдерживаемая роль исполнителя");
     }
   }
 
@@ -594,7 +642,7 @@ export class BookingsService {
 
     const timezone = query.timezone ?? "UTC";
     if (!DateTime.now().setZone(timezone).isValid) {
-      throw new BadRequestException("Invalid timezone");
+      throw new BadRequestException("Некорректная timezone");
     }
 
     const startLocal = query.dateFrom
@@ -605,11 +653,11 @@ export class BookingsService {
       : startLocal.endOf("day");
 
     if (!startLocal.isValid || !endLocal.isValid) {
-      throw new BadRequestException("Invalid date range");
+      throw new BadRequestException("Некорректный диапазон дат");
     }
 
     if (endLocal < startLocal) {
-      throw new BadRequestException("dateTo must be greater than or equal to dateFrom");
+      throw new BadRequestException("dateTo должно быть больше или равно dateFrom");
     }
 
     return {
@@ -625,11 +673,11 @@ export class BookingsService {
     const normalized = value?.trim();
 
     if (!normalized) {
-      throw new BadRequestException("Idempotency-Key header is required");
+      throw new BadRequestException("Заголовок Idempotency-Key обязателен");
     }
 
     if (!/^[A-Za-z0-9._:-]{8,128}$/.test(normalized)) {
-      throw new BadRequestException("Idempotency-Key format is invalid");
+      throw new BadRequestException("Некорректный формат Idempotency-Key");
     }
 
     return normalized;

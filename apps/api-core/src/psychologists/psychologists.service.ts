@@ -32,7 +32,7 @@ export class PsychologistsService {
     });
 
     if (!profile) {
-      throw new NotFoundException("Psychologist profile not found");
+      throw new NotFoundException("Профиль психолога не найден");
     }
 
     return this.serialize(profile);
@@ -44,7 +44,7 @@ export class PsychologistsService {
     });
 
     if (!existing) {
-      throw new NotFoundException("Psychologist profile not found");
+      throw new NotFoundException("Профиль психолога не найден");
     }
 
     if (dto.publicSlug && dto.publicSlug !== existing.publicSlug) {
@@ -59,7 +59,7 @@ export class PsychologistsService {
       });
 
       if (slugConflict) {
-        throw new ConflictException("Public slug is already taken");
+        throw new ConflictException("Публичный slug уже занят");
       }
     }
 
@@ -106,7 +106,7 @@ export class PsychologistsService {
     });
 
     if (!profile) {
-      throw new NotFoundException("Psychologist profile not found");
+      throw new NotFoundException("Профиль психолога не найден");
     }
 
     const existing = await this.prisma.specialization.findMany({
@@ -120,7 +120,7 @@ export class PsychologistsService {
     });
 
     if (existing.length !== new Set(dto.specializationIds).size) {
-      throw new NotFoundException("One or more specializations were not found");
+      throw new NotFoundException("Одна или несколько специализаций не найдены");
     }
 
     await this.prisma.$transaction(async (tx) => {

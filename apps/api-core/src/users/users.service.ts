@@ -35,7 +35,7 @@ export class UsersService {
     });
 
     if (!user) {
-      throw new NotFoundException("User not found");
+      throw new NotFoundException("Пользователь не найден");
     }
 
     return this.serializeUser(user);
@@ -71,7 +71,7 @@ export class UsersService {
       });
 
       if (!profile) {
-        throw new NotFoundException("Psychologist profile not found");
+        throw new NotFoundException("Профиль психолога не найден");
       }
 
       await this.prisma.psychologistProfile.update({
@@ -140,7 +140,7 @@ export class UsersService {
     });
 
     if (!session || session.userId !== userId) {
-      throw new ForbiddenException("Session not found");
+      throw new ForbiddenException("Сессия не найдена");
     }
 
     await this.prisma.refreshToken.update({

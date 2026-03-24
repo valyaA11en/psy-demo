@@ -1,24 +1,25 @@
 # api-core
 
-NestJS core API for the platform.
+Основной NestJS API платформы.
 
-## Current scope
+## Текущий состав
 
-- NestJS application bootstrap
-- Prisma schema for auth/RBAC/profiles/consent/audit foundation
-- auth module with register/login/refresh/logout/logout-all
-- JWT access token + refresh token rotation
-- user self-service endpoints
-- public catalog endpoints
-- psychologist self-profile and specialization management
-- psychologist availability rules and appointment slots
-- booking orchestration with transactional slot reservation
-- mock payments flow for local end-to-end testing
-- mock video-session provisioning and temporary join access
-- Swagger setup
-- Dockerfile and env template
+- инициализация NestJS-приложения
+- Prisma schema для основы auth/RBAC/profiles/consent/audit
+- auth-модуль с register/login/refresh/logout/logout-all
+- JWT access token и refresh token rotation
+- пользовательские endpoints самообслуживания
+- публичный каталог
+- профиль психолога и специализации для самообслуживания
+- правила доступности и слоты записи
+- оркестрация бронирования с транзакционным резервированием слота
+- тестовые платежи для локального end-to-end тестирования
+- тестовое создание видеосессии и временный доступ на подключение
+- публикация realtime events через Redis для bookings, payments и готовности сессии
+- Swagger
+- Dockerfile и шаблон env
 
-## Implemented endpoints
+## Реализованные endpoints
 
 - `GET /api/v1/health`
 - `POST /api/v1/auth/register`
@@ -60,11 +61,11 @@ NestJS core API for the platform.
 - `GET /api/v1/video-sessions/:consultationId`
 - `POST /api/v1/video-sessions/:consultationId/access`
 
-## Local setup
+## Локальный запуск
 
-1. Copy `.env.example` to `.env`
-2. Set `DATABASE_URL`
-3. Run:
+1. Скопировать `.env.example` в `.env`
+2. Указать `DATABASE_URL`
+3. Выполнить:
 
 ```bash
 npm install
@@ -74,24 +75,25 @@ npx prisma db seed
 npm run start:dev
 ```
 
-Swagger will be available at `/docs`.
+Swagger будет доступен по `/docs`.
 
-## Demo users
+## Демо-пользователи
 
 - `admin@example.com` / `Admin12345!`
 - `psychologist@example.com` / `Psychologist123!`
 - `client@example.com` / `Client12345!`
 
-## Notes
+## Примечания
 
-- Initial migration SQL is generated in `prisma/migrations/20260323161000_init/migration.sql`.
-- Catalog filters currently support `q`, `specialization`, `language`, `format`, `priceMin`, `priceMax`, `sort`, `page`, `limit`.
-- Availability generation is based on weekly rules, timezone-aware local windows, and UTC slot storage.
-- Booking creation requires `Idempotency-Key` and atomically flips the slot from `open` to `booked`.
-- Booking history is stored in `consultations` and `consultation_status_history`.
-- Payments are backed by `payments` and `payment_events`.
-- Payment creation also requires `Idempotency-Key`; the current provider is a mock sandbox for local/demo use.
-- Video session provisioning is lazy: once a consultation has a successful payment, `video-sessions` will expose a mock room and issue a short-lived join token.
-- Admins are intentionally blocked from session links and access tokens to avoid excessive access to private consultations.
-- Demo seed now includes one approved psychologist profile, active availability rules, future open slots, and one scheduled consultation.
-- Notifications, files, and websocket updates are planned next.
+- Стартовая SQL-миграция сгенерирована в `prisma/migrations/20260323161000_init/migration.sql`
+- Фильтры каталога сейчас поддерживают `q`, `specialization`, `language`, `format`, `priceMin`, `priceMax`, `sort`, `page`, `limit`
+- Генерация доступности строится на недельных правилах, локальных окнах с учётом часового пояса и хранении слотов в UTC
+- Создание бронирования требует `Idempotency-Key` и атомарно переводит слот из `open` в `booked`
+- История статусов хранится в `consultations` и `consultation_status_history`
+- Платежи опираются на `payments` и `payment_events`
+- Создание платежа тоже требует `Idempotency-Key`; текущий провайдер — тестовая платёжная песочница для локального и демонстрационного использования
+- Видеосессия создаётся лениво: после успешной оплаты `video-sessions` выдаёт тестовую комнату и короткоживущий токен на подключение
+- Админам намеренно запрещён доступ к ссылкам на сессию и токенам доступа, чтобы исключить избыточный доступ к приватным консультациям
+- `api-core` публикует минимальные доменные события в Redis; `ws-gateway` их потребляет, а клиентское приложение перечитывает защищённые данные по REST
+- Демо-seed включает одобренный профиль психолога, активные правила доступности, будущие свободные слоты и одну запланированную консультацию
+- Хранение уведомлений, файлы и более богатые административные сценарии пока остаются следующими шагами

@@ -1,59 +1,62 @@
-# Consultations with a Psychologist
+# Консультации с психологом
 
-Production-like pet project for an online psychology consultation platform.
+Production-like pet project платформы онлайн-консультаций с психологами.
 
-## Stack
+## Стек
 
 - Frontend: Next.js
 - Core API: NestJS
 - Realtime: NestJS WebSocket gateway
-- Background workers: Go
-- Admin panel: Laravel
-- Data: PostgreSQL, Redis, S3-compatible storage
+- Фоновые сервисы: Go
+- Админ-панель: Laravel
+- Данные: PostgreSQL, Redis, S3-compatible storage
 - Edge: Nginx
-- Packaging: Docker Compose
+- Контейнеризация: Docker Compose
 
-## What is already prepared
+## Что уже подготовлено
 
-- system architecture blueprint
-- product and security requirements
-- repository and GitHub standards
-- Docker/network design
-- database and API module map
-- MVP/V2 scope split
-- working `apps/api-core` foundation with auth, refresh sessions, public catalog, psychologist self-profile APIs, availability/slot management, transactional bookings, mock payments, and mock video-session access
-- working `apps/web-app` demo with catalog, auth, dashboard, booking, mock payment, and session access screens
+- архитектурный blueprint системы
+- продуктовые и security-требования
+- стандарты репозитория и GitHub-оформления
+- Docker и схема сетевого взаимодействия
+- карта БД и API-модулей
+- разделение MVP/V2
+- рабочий `apps/api-core` с auth, refresh sessions, публичным каталогом, профилями психологов, слотами, бронированиями, тестовыми платежами и доступом к видеосессии
+- рабочий `apps/web-app` с каталогом, auth, кабинетом, записью, тестовой оплатой и экраном доступа к сессии
+- рабочий `apps/ws-gateway` с JWT-аутентификацией сокетов, Redis pub/sub и обновлением дашборда в реальном времени
+- рабочий `apps/admin-panel` на Laravel для модерации, жалоб, оплат, управления статусами пользователей и аудита
 
-Main document: [docs/system-blueprint.md](docs/system-blueprint.md)
+Основной документ: [docs/system-blueprint.md](docs/system-blueprint.md)
 
-## Repository intent
+## Назначение репозитория
 
-This repository is being prepared as a serious engineering portfolio project. The blueprint is written so the codebase can be implemented incrementally without reworking the security model later.
+Репозиторий оформляется как серьёзный инженерный pet project для портфолио. Архитектура и документация заранее закладывают корректные security- и privacy-границы, чтобы реализацию можно было наращивать без переделки модели доступа.
 
-## Core principles
+## Ключевые принципы
 
-- privacy by design
-- least privilege
-- production-like service boundaries
-- auditable admin operations
-- minimal exposure of sensitive mental-health-related data
+- приватность по проектированию
+- минимально необходимые привилегии
+- production-like границы сервисов
+- аудит важных административных действий
+- минимизация экспонирования чувствительных данных
 
-## Current demo flow
+## Текущий демо-сценарий
 
-1. Open the public catalog in `apps/web-app`
-2. Sign in or register as a client
-3. Create a booking from a psychologist profile
-4. Complete mock payment from the dashboard
-5. Request a short-lived session access token
+1. Открыть публичный каталог в `apps/web-app`
+2. Войти или зарегистрироваться как клиент
+3. Создать бронирование из карточки психолога
+4. Провести тестовую оплату из кабинета
+5. Посмотреть обновление данных в реальном времени
+6. Запросить короткоживущий токен доступа к сессии
 
-## Suggested next steps
+## Следующие шаги
 
-1. Add `apps/ws-gateway` and notification triggers for bookings, payments, and session readiness.
-2. Implement Laravel `admin-panel` for moderation, complaints, and audit views.
-3. Add Go workers for slot calculation and notification delivery.
-4. Expand CI to run backend and frontend tests as the codebase grows.
+1. Добавить Go-воркеры для расчёта слотов и доставки уведомлений
+2. Сохранить пользовательские уведомления и связать их с realtime-слоем
+3. Расширить пользовательские сценарии аккаунта и визуальную систему в `apps/web-app`
+4. Расширить CI до lint/test/build по мере роста кодовой базы
 
-## Repo standards
+## Стандарты репозитория
 
 - `CONTRIBUTING.md`
 - `SECURITY.md`
@@ -61,10 +64,10 @@ This repository is being prepared as a serious engineering portfolio project. Th
 - `.github/workflows/ci.yml`
 - `.github/PULL_REQUEST_TEMPLATE.md`
 
-## Local development target
+## Локальный запуск
 
 ```bash
 docker compose up --build
 ```
 
-At the current stage the repository contains the architecture package, the first implemented backend service in `apps/api-core`, and a working `Next.js` frontend demo in `apps/web-app`.
+На текущем этапе в репозитории уже есть архитектурный пакет, рабочий `api-core`, realtime `ws-gateway`, демонстрационное `Next.js`-приложение и Laravel admin-panel.
