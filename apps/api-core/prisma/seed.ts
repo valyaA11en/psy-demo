@@ -2,6 +2,8 @@ import {
   AppointmentSlotSource,
   AppointmentSlotStatus,
   ConsultationStatus,
+  NotificationChannel,
+  NotificationStatus,
   PrismaClient,
   PsychologistApprovalStatus,
   UserStatus,
@@ -147,6 +149,60 @@ async function main() {
       formatsJson: ["online"],
       approvalStatus: PsychologistApprovalStatus.approved,
       moderatedByUserId: admin.id,
+    },
+  });
+
+  await prisma.notificationPreference.upsert({
+    where: { userId: client.id },
+    update: {
+      inAppEnabled: true,
+      emailEnabled: true,
+      telegramEnabled: true,
+      bookingUpdatesEnabled: true,
+      paymentUpdatesEnabled: true,
+      sessionUpdatesEnabled: true,
+      systemUpdatesEnabled: true,
+      telegramChatId: "123456789",
+      telegramLinkedAt: new Date(),
+    },
+    create: {
+      userId: client.id,
+      inAppEnabled: true,
+      emailEnabled: true,
+      telegramEnabled: true,
+      bookingUpdatesEnabled: true,
+      paymentUpdatesEnabled: true,
+      sessionUpdatesEnabled: true,
+      systemUpdatesEnabled: true,
+      telegramChatId: "123456789",
+      telegramLinkedAt: new Date(),
+    },
+  });
+
+  await prisma.notificationPreference.upsert({
+    where: { userId: psychologist.id },
+    update: {
+      inAppEnabled: true,
+      emailEnabled: true,
+      telegramEnabled: false,
+      bookingUpdatesEnabled: true,
+      paymentUpdatesEnabled: true,
+      sessionUpdatesEnabled: true,
+      systemUpdatesEnabled: true,
+      telegramChatId: null,
+      telegramLinkedAt: null,
+    },
+    create: {
+      userId: psychologist.id,
+      inAppEnabled: true,
+      emailEnabled: true,
+      telegramEnabled: false,
+      bookingUpdatesEnabled: true,
+      paymentUpdatesEnabled: true,
+      sessionUpdatesEnabled: true,
+      systemUpdatesEnabled: true,
+      telegramChatId: null,
+      telegramLinkedAt: null,
     },
   });
 
@@ -359,6 +415,79 @@ async function main() {
         granted: true,
         grantedAt: new Date(),
         source: "psychologist-application",
+      },
+    ],
+  });
+
+  await prisma.notification.deleteMany({
+    where: {
+      userId: {
+        in: [client.id, psychologist.id],
+      },
+    },
+  });
+
+  await prisma.notification.createMany({
+    data: [
+      {
+        userId: client.id,
+        channel: NotificationChannel.in_app,
+        type: "booking.created",
+        title: "Бронирование создано",
+        body: "Запись на консультацию успешно создана.",
+        dedupKey: "seed:booking-created:client",
+        status: NotificationStatus.sent,
+        attempts: 1,
+        queuedAt: new Date(),
+        sentAt: new Date(),
+      },
+      {
+        userId: psychologist.id,
+        channel: NotificationChannel.in_app,
+        type: "booking.created",
+        title: "Новая консультация",
+        body: "У вас появилась новая запланированная консультация.",
+        dedupKey: "seed:booking-created:psychologist",
+        status: NotificationStatus.sent,
+        attempts: 1,
+        queuedAt: new Date(),
+        sentAt: new Date(),
+      },
+      {
+        userId: client.id,
+        channel: NotificationChannel.in_app,
+        type: "payment.created",
+        title: "Платёж ожидает подтверждения",
+        body: "Для консультации создан тестовый платёж.",
+        dedupKey: "seed:payment-created:client",
+        status: NotificationStatus.queued,
+        attempts: 0,
+        queuedAt: new Date(),
+      },
+      {
+        userId: client.id,
+        channel: NotificationChannel.email,
+        type: "booking.created",
+        title: "Подтверждение записи",
+        body: "На вашу почту отправлено подтверждение записи на консультацию.",
+        dedupKey: "seed:booking-created:client-email",
+        status: NotificationStatus.queued,
+        attempts: 0,
+        queuedAt: new Date(),
+      },
+      {
+        userId: client.id,
+        channel: NotificationChannel.telegram,
+        type: "booking.created",
+        title: "Напоминание в Telegram",
+        body: "Тестовое уведомление о записи готово к отправке в Telegram.",
+        dedupKey: "seed:booking-created:client-telegram",
+        status: NotificationStatus.queued,
+        attempts: 0,
+        queuedAt: new Date(),
+        payloadJson: {
+          telegramChatId: "123456789",
+        },
       },
     ],
   });

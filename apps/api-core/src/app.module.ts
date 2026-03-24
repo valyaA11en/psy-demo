@@ -11,6 +11,7 @@ import { HttpExceptionFilter } from "./common/filters/http-exception.filter";
 import { RolesGuard } from "./common/guards/roles.guard";
 import { ResponseEnvelopeInterceptor } from "./common/interceptors/response-envelope.interceptor";
 import { HealthModule } from "./health/health.module";
+import { NotificationsModule } from "./notifications/notifications.module";
 import { PaymentsModule } from "./payments/payments.module";
 import { PsychologistsModule } from "./psychologists/psychologists.module";
 import { PrismaModule } from "./prisma/prisma.module";
@@ -39,6 +40,7 @@ import { VideoSessionsModule } from "./video-sessions/video-sessions.module";
     RealtimeModule,
     HealthModule,
     AuthModule,
+    NotificationsModule,
     AvailabilityModule,
     BookingsModule,
     PaymentsModule,

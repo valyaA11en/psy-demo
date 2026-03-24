@@ -79,6 +79,29 @@ export type AvailabilitySlot = {
   updatedAt: string;
 };
 
+export type AvailabilityRule = {
+  id: string;
+  weekday: string;
+  startTime: string;
+  endTime: string;
+  slotDurationMin: number;
+  bufferMin: number;
+  timezone: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AvailabilityException = {
+  id: string;
+  startsAt: string;
+  endsAt: string;
+  reason: string | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type PublicSlotsResponse = {
   psychologist: {
     id: string;
@@ -90,6 +113,17 @@ export type PublicSlotsResponse = {
     dateFrom: string | null;
     dateTo: string | null;
     timezone: string;
+    limit: number;
+  };
+};
+
+export type MyAvailabilitySlotsResponse = {
+  items: AvailabilitySlot[];
+  filters: {
+    dateFrom: string | null;
+    dateTo: string | null;
+    timezone: string;
+    status: string | null;
     limit: number;
   };
 };
@@ -226,6 +260,60 @@ export type PaymentListResponse = {
     status: string | null;
     consultationId: string | null;
   };
+};
+
+export type NotificationRecord = {
+  id: string;
+  channel: string;
+  type: string;
+  title: string;
+  body: string;
+  payload?: Record<string, unknown> | null;
+  status: string;
+  attempts: number;
+  queuedAt: string;
+  sentAt: string | null;
+  failedAt: string | null;
+  readAt: string | null;
+  lastErrorCode: string | null;
+  lastErrorMessage: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type NotificationPreferences = {
+  userId: string;
+  inAppEnabled: boolean;
+  emailEnabled: boolean;
+  telegramEnabled: boolean;
+  bookingUpdatesEnabled: boolean;
+  paymentUpdatesEnabled: boolean;
+  sessionUpdatesEnabled: boolean;
+  systemUpdatesEnabled: boolean;
+  telegramLinked: boolean;
+  telegramChatIdMasked: string | null;
+  telegramLinkedAt: string | null;
+  telegramBotUsername: string | null;
+  telegramLinkingAvailable: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type TelegramLinkSession = {
+  botUsername: string;
+  deepLink: string;
+  tokenExpiresAt: string;
+  expiresInSec: number;
+};
+
+export type NotificationListResponse = {
+  items: NotificationRecord[];
+  pagination: Pagination;
+  filters: {
+    status: string | null;
+    unreadOnly: boolean;
+  };
+  unreadCount: number;
 };
 
 export type SessionInfo = {

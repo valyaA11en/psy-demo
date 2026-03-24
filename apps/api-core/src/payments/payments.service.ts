@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import {
   ConsultationStatus,
+  NotificationChannel,
   PaymentEventType,
   PaymentStatus,
   Prisma,
@@ -14,6 +15,8 @@ import {
 } from "@nestjs/common";
 import type { Request } from "express";
 import { AuditService } from "../audit/audit.service";
+import type { CreateNotificationInput } from "../notifications/interfaces/create-notification-input.interface";
+import { NotificationsService } from "../notifications/notifications.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { RealtimeService } from "../realtime/realtime.service";
 import { CreatePaymentDto } from "./dto/create-payment.dto";
@@ -90,6 +93,7 @@ export class PaymentsService {
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
     private readonly realtimeService: RealtimeService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async createPayment(
@@ -246,6 +250,20 @@ export class PaymentsService {
         status: payment.status,
       },
     });
+    await this.notificationsService.createQueuedNotifications([
+      ...this.notificationVariants({
+        userId: payment.consultation.clientUserId,
+        type: "payment.created",
+        title: "Платёж создан",
+        body: `Создан тестовый платёж на ${payment.amount} ${payment.currency} для консультации ${this.formatScheduleLabel(payment.consultation.scheduledAt)}.`,
+        dedupKey: `payment.created:${paymentId}`,
+        payloadJson: {
+          consultationId: payment.consultationId,
+          paymentId,
+          status: payment.status,
+        },
+      }),
+    ]);
 
     return this.serializePayment(payment, "client", true);
   }
@@ -385,6 +403,60 @@ export class PaymentsService {
         status: "payment_succeeded",
       },
     });
+    await this.notificationsService.createQueuedNotifications([
+      ...this.notificationVariants({
+        userId: updated.consultation.clientUserId,
+        type: "payment.succeeded",
+        title: "Платёж подтверждён",
+        body: `Платёж для консультации ${this.formatScheduleLabel(updated.consultation.scheduledAt)} успешно подтверждён.`,
+        dedupKey: `payment.succeeded:${paymentId}`,
+        payloadJson: {
+          consultationId: updated.consultationId,
+          paymentId,
+          status: updated.status,
+          audience: "client",
+        },
+      }),
+      ...this.notificationVariants({
+        userId: updated.consultation.psychologistUserId,
+        type: "payment.succeeded",
+        title: "Консультация оплачена",
+        body: `Клиент оплатил консультацию ${this.formatScheduleLabel(updated.consultation.scheduledAt)}.`,
+        dedupKey: `payment.succeeded:${paymentId}`,
+        payloadJson: {
+          consultationId: updated.consultationId,
+          paymentId,
+          status: updated.status,
+          audience: "psychologist",
+        },
+      }),
+      ...this.notificationVariants({
+        userId: updated.consultation.clientUserId,
+        type: "video.session_ready",
+        title: "Доступ к видеосессии открыт",
+        body: `Можно получить токен доступа к сессии ${this.formatScheduleLabel(updated.consultation.scheduledAt)}.`,
+        dedupKey: `video.session_ready:${updated.consultationId}`,
+        payloadJson: {
+          consultationId: updated.consultationId,
+          paymentId,
+          status: "payment_succeeded",
+          audience: "client",
+        },
+      }),
+      ...this.notificationVariants({
+        userId: updated.consultation.psychologistUserId,
+        type: "video.session_ready",
+        title: "Видеосессия готова",
+        body: `Для консультации ${this.formatScheduleLabel(updated.consultation.scheduledAt)} доступна видеокомната.`,
+        dedupKey: `video.session_ready:${updated.consultationId}`,
+        payloadJson: {
+          consultationId: updated.consultationId,
+          paymentId,
+          status: "payment_succeeded",
+          audience: "psychologist",
+        },
+      }),
+    ]);
 
     return this.serializePayment(updated, this.resolveView(updated, actorUserId, roles), true);
   }
@@ -463,6 +535,21 @@ export class PaymentsService {
         status: updated.status,
       },
     });
+    await this.notificationsService.createQueuedNotifications([
+      ...this.notificationVariants({
+        userId: updated.consultation.clientUserId,
+        type: "payment.failed",
+        title: "Платёж отклонён",
+        body: `Платёж для консультации ${this.formatScheduleLabel(updated.consultation.scheduledAt)} отклонён.`,
+        dedupKey: `payment.failed:${paymentId}`,
+        payloadJson: {
+          consultationId: updated.consultationId,
+          paymentId,
+          status: updated.status,
+          failureCode,
+        },
+      }),
+    ]);
 
     return this.serializePayment(updated, this.resolveView(updated, actorUserId, roles), true);
   }
@@ -535,6 +622,20 @@ export class PaymentsService {
         status: updated.status,
       },
     });
+    await this.notificationsService.createQueuedNotifications([
+      ...this.notificationVariants({
+        userId: updated.consultation.clientUserId,
+        type: "payment.cancelled",
+        title: "Платёж отменён",
+        body: `Платёж для консультации ${this.formatScheduleLabel(updated.consultation.scheduledAt)} отменён.`,
+        dedupKey: `payment.cancelled:${paymentId}`,
+        payloadJson: {
+          consultationId: updated.consultationId,
+          paymentId,
+          status: updated.status,
+        },
+      }),
+    ]);
 
     return this.serializePayment(updated, this.resolveView(updated, actorUserId, roles), true);
   }
@@ -692,5 +793,33 @@ export class PaymentsService {
     }
 
     return base;
+  }
+
+  private formatScheduleLabel(date: Date) {
+    return new Intl.DateTimeFormat("ru-RU", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      timeZone: "UTC",
+    }).format(date);
+  }
+
+  private notificationVariants(input: Omit<CreateNotificationInput, "channel">) {
+    return [
+      {
+        ...input,
+        channel: NotificationChannel.in_app,
+      },
+      {
+        ...input,
+        channel: NotificationChannel.email,
+      },
+      {
+        ...input,
+        channel: NotificationChannel.telegram,
+      },
+    ];
   }
 }

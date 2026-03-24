@@ -83,6 +83,11 @@ export function humanizeCode(value: string | null | undefined) {
     payment: "платёж",
     video_session: "видеосессия",
     booking: "бронирование",
+    in_app: "в приложении",
+    email: "эл. почта",
+    telegram: "telegram",
+    processing: "обрабатывается",
+    sent: "доставлено",
     paid: "оплачено",
     payment_required: "требуется оплата",
     mock_video: "тестовый провайдер",
@@ -92,9 +97,24 @@ export function humanizeCode(value: string | null | undefined) {
     "booking.cancelled": "бронирование отменено",
     "booking.completed": "консультация завершена",
     "payment.created": "создан платёж",
+    "payment.succeeded": "платёж подтверждён",
+    "payment.failed": "платёж отклонён",
+    "payment.cancelled": "платёж отменён",
     "payment.updated": "обновлён платёж",
     "video.session_ready": "видеосессия готова",
   };
+
+  Object.assign(dictionary, {
+    manual: "вручную",
+    generated: "автогенерация",
+    monday: "понедельник",
+    tuesday: "вторник",
+    wednesday: "среда",
+    thursday: "четверг",
+    friday: "пятница",
+    saturday: "суббота",
+    sunday: "воскресенье",
+  });
 
   return dictionary[value] ?? value.replaceAll("_", " ").replaceAll(".", " ");
 }

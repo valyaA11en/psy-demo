@@ -1,5 +1,4 @@
 # Compose stack for the current demo platform.
-# Go workers remain scaffold placeholders; web, api, ws, and admin are runnable.
 
 services:
   nginx:
@@ -9,6 +8,7 @@ services:
       - api-core
       - ws-gateway
       - admin-panel
+      - telegram-link-webhook
     ports:
       - "${NGINX_HTTP_PORT:-80}:80"
       - "${NGINX_HTTPS_PORT:-443}:443"
@@ -47,6 +47,11 @@ services:
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
       VIDEO_ACCESS_SECRET: ${VIDEO_ACCESS_SECRET}
+      TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME}
+      TELEGRAM_LINK_TOKEN_TTL_MIN: ${TELEGRAM_LINK_TOKEN_TTL_MIN}
+      WEBHOOK_SIGNING_SECRET: ${WEBHOOK_SIGNING_SECRET}
+      BOOKING_SLOT_QUEUE_KEY: ${BOOKING_SLOT_QUEUE_KEY}
+      NOTIFICATION_QUEUE_KEY: ${NOTIFICATION_QUEUE_KEY}
       SWAGGER_ENABLED: "true"
     depends_on:
       - postgres
@@ -99,11 +104,19 @@ services:
       - data
 
   booking-slot-worker:
-    image: golang:1.24-alpine
-    command: ["sh", "-c", "echo scaffold booking-slot-worker && sleep infinity"]
-    working_dir: /app
-    volumes:
-      - ./services/booking-slot-worker:/app
+    build:
+      context: ./services/booking-slot-worker
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
+      REDIS_URL: redis://redis:6379
+      BOOKING_SLOT_QUEUE_KEY: ${BOOKING_SLOT_QUEUE_KEY}
+      BOOKING_SLOT_WORKER_CONCURRENCY: ${BOOKING_SLOT_WORKER_CONCURRENCY}
+      BOOKING_SLOT_SWEEP_INTERVAL_SEC: ${BOOKING_SLOT_SWEEP_INTERVAL_SEC}
+      BOOKING_SLOT_SWEEP_BATCH_SIZE: ${BOOKING_SLOT_SWEEP_BATCH_SIZE}
+      BOOKING_SLOT_POP_TIMEOUT_SEC: ${BOOKING_SLOT_POP_TIMEOUT_SEC}
+      BOOKING_SLOT_LOOKAHEAD_DAYS: ${BOOKING_SLOT_LOOKAHEAD_DAYS}
+      BOOKING_SLOT_CLEANUP_BATCH_SIZE: ${BOOKING_SLOT_CLEANUP_BATCH_SIZE}
     depends_on:
       - postgres
       - redis
@@ -112,17 +125,49 @@ services:
       - data
 
   notification-worker:
-    image: golang:1.24-alpine
-    command: ["sh", "-c", "echo scaffold notification-worker && sleep infinity"]
-    working_dir: /app
-    volumes:
-      - ./services/notification-worker:/app
+    build:
+      context: ./services/notification-worker
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
+      REDIS_URL: redis://redis:6379
+      NOTIFICATION_QUEUE_KEY: ${NOTIFICATION_QUEUE_KEY}
+      NOTIFICATION_WORKER_CONCURRENCY: ${NOTIFICATION_WORKER_CONCURRENCY}
+      NOTIFICATION_SWEEP_INTERVAL_SEC: ${NOTIFICATION_SWEEP_INTERVAL_SEC}
+      NOTIFICATION_SWEEP_BATCH_SIZE: ${NOTIFICATION_SWEEP_BATCH_SIZE}
+      NOTIFICATION_POP_TIMEOUT_SEC: ${NOTIFICATION_POP_TIMEOUT_SEC}
+      NOTIFICATION_RETRY_BASE_SEC: ${NOTIFICATION_RETRY_BASE_SEC}
+      NOTIFICATION_RETRY_MAX_SEC: ${NOTIFICATION_RETRY_MAX_SEC}
+      NOTIFICATION_PROCESSING_TIMEOUT_SEC: ${NOTIFICATION_PROCESSING_TIMEOUT_SEC}
+      EMAIL_PROVIDER: ${EMAIL_PROVIDER}
+      EMAIL_FROM: ${EMAIL_FROM}
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_USERNAME: ${SMTP_USERNAME}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      TELEGRAM_PROVIDER: ${TELEGRAM_PROVIDER}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
     depends_on:
       - postgres
       - redis
     networks:
       - app
       - data
+
+  telegram-link-webhook:
+    build:
+      context: ./services/telegram-link-webhook
+      dockerfile: Dockerfile
+    environment:
+      PORT: 4010
+      API_CORE_INTERNAL_BASE_URL: http://api-core:4000/api/v1
+      WEBHOOK_SIGNING_SECRET: ${WEBHOOK_SIGNING_SECRET}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET}
+    depends_on:
+      - api-core
+    networks:
+      - app
 
   postgres:
     image: postgres:17-alpine

@@ -1,6 +1,7 @@
 import {
   AppointmentSlotStatus,
   ConsultationStatus,
+  NotificationChannel,
   Prisma,
   PsychologistApprovalStatus,
 } from "@prisma/client";
@@ -14,6 +15,8 @@ import {
 import { DateTime } from "luxon";
 import type { Request } from "express";
 import { AuditService } from "../audit/audit.service";
+import type { CreateNotificationInput } from "../notifications/interfaces/create-notification-input.interface";
+import { NotificationsService } from "../notifications/notifications.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { RealtimeService } from "../realtime/realtime.service";
 import { CancelBookingDto } from "./dto/cancel-booking.dto";
@@ -107,6 +110,7 @@ export class BookingsService {
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
     private readonly realtimeService: RealtimeService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async createBooking(
@@ -258,6 +262,32 @@ export class BookingsService {
           status: created.status,
         },
       });
+      await this.notificationsService.createQueuedNotifications([
+        ...this.notificationVariants({
+          userId: clientUserId,
+          type: "booking.created",
+          title: "Бронирование создано",
+          body: `Запись на ${this.formatSlotLabel(created.slot.startsAt)} подтверждена.`,
+          dedupKey: `booking.created:${consultationId}`,
+          payloadJson: {
+            consultationId,
+            status: created.status,
+            audience: "client",
+          },
+        }),
+        ...this.notificationVariants({
+          userId: created.psychologistUserId,
+          type: "booking.created",
+          title: "Новая консультация",
+          body: `Клиент записался на ${this.formatSlotLabel(created.slot.startsAt)}.`,
+          dedupKey: `booking.created:${consultationId}`,
+          payloadJson: {
+            consultationId,
+            status: created.status,
+            audience: "psychologist",
+          },
+        }),
+      ]);
 
       return this.serializeBooking(created, "client", true);
     } catch (error) {
@@ -385,6 +415,40 @@ export class BookingsService {
         reasonCode,
       },
     });
+    await this.notificationsService.createQueuedNotifications([
+      ...this.notificationVariants({
+        userId: updated.clientUserId,
+        type: "booking.cancelled",
+        title:
+          actorRole === "client"
+            ? "Вы отменили консультацию"
+            : "Консультация отменена",
+        body: `Консультация на ${this.formatSlotLabel(updated.slot.startsAt)} отменена.`,
+        dedupKey: `booking.cancelled:${bookingId}:${updated.status}`,
+        payloadJson: {
+          consultationId: bookingId,
+          status: updated.status,
+          reasonCode,
+          audience: "client",
+        },
+      }),
+      ...this.notificationVariants({
+        userId: updated.psychologistUserId,
+        type: "booking.cancelled",
+        title:
+          actorRole === "psychologist"
+            ? "Вы отменили консультацию"
+            : "Консультация отменена",
+        body: `Консультация на ${this.formatSlotLabel(updated.slot.startsAt)} отменена.`,
+        dedupKey: `booking.cancelled:${bookingId}:${updated.status}`,
+        payloadJson: {
+          consultationId: bookingId,
+          status: updated.status,
+          reasonCode,
+          audience: "psychologist",
+        },
+      }),
+    ]);
 
     return this.serializeBooking(updated, this.resolveView(updated, actorUserId, roles), true);
   }
@@ -457,6 +521,32 @@ export class BookingsService {
         status: updated.status,
       },
     });
+    await this.notificationsService.createQueuedNotifications([
+      ...this.notificationVariants({
+        userId: updated.clientUserId,
+        type: "booking.completed",
+        title: "Консультация завершена",
+        body: `Консультация на ${this.formatSlotLabel(updated.slot.startsAt)} завершена.`,
+        dedupKey: `booking.completed:${bookingId}`,
+        payloadJson: {
+          consultationId: bookingId,
+          status: updated.status,
+          audience: "client",
+        },
+      }),
+      ...this.notificationVariants({
+        userId: updated.psychologistUserId,
+        type: "booking.completed",
+        title: "Консультация завершена",
+        body: `Консультация на ${this.formatSlotLabel(updated.slot.startsAt)} отмечена как завершённая.`,
+        dedupKey: `booking.completed:${bookingId}`,
+        payloadJson: {
+          consultationId: bookingId,
+          status: updated.status,
+          audience: "psychologist",
+        },
+      }),
+    ]);
 
     return this.serializeBooking(updated, this.resolveView(updated, actorUserId, roles), true);
   }
@@ -751,5 +841,28 @@ export class BookingsService {
     }
 
     return base;
+  }
+
+  private formatSlotLabel(date: Date) {
+    return DateTime.fromJSDate(date, { zone: "utc" })
+      .setLocale("ru")
+      .toFormat("dd LLL yyyy, HH:mm 'UTC'");
+  }
+
+  private notificationVariants(input: Omit<CreateNotificationInput, "channel">) {
+    return [
+      {
+        ...input,
+        channel: NotificationChannel.in_app,
+      },
+      {
+        ...input,
+        channel: NotificationChannel.email,
+      },
+      {
+        ...input,
+        channel: NotificationChannel.telegram,
+      },
+    ];
   }
 }
