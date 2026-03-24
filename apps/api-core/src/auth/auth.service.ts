@@ -36,7 +36,7 @@ export class AuthService {
     });
 
     if (existing) {
-      throw new ConflictException("User already exists");
+      throw new ConflictException("Пользователь уже существует");
     }
 
     const role = await this.prisma.role.findUnique({
@@ -46,7 +46,7 @@ export class AuthService {
     });
 
     if (!role) {
-      throw new ForbiddenException("Registration role is unavailable");
+      throw new ForbiddenException("Регистрация с этой ролью недоступна");
     }
 
     const user = await this.prisma.$transaction(async (tx) => {
@@ -102,8 +102,8 @@ export class AuthService {
           data: {
             userId: created.id,
             publicSlug: `psychologist-${created.id.slice(0, 8)}`,
-            firstName: dto.firstName ?? "New",
-            lastName: dto.lastName ?? "Psychologist",
+            firstName: dto.firstName ?? "Новый",
+            lastName: dto.lastName ?? "Психолог",
             publicTitle: dto.publicTitle ?? null,
             approvalStatus: PsychologistApprovalStatus.pending_review,
           },
@@ -156,11 +156,11 @@ export class AuthService {
     });
 
     if (!user || !(await bcrypt.compare(dto.password, user.passwordHash))) {
-      throw new UnauthorizedException("Invalid credentials");
+      throw new UnauthorizedException("Неверные учётные данные");
     }
 
     if (user.status !== UserStatus.active) {
-      throw new ForbiddenException("User is not active");
+      throw new ForbiddenException("Пользователь не активен");
     }
 
     await this.prisma.user.update({
@@ -188,7 +188,7 @@ export class AuthService {
     const refreshToken = request.cookies?.[this.refreshCookieName];
 
     if (!refreshToken) {
-      throw new UnauthorizedException("Refresh token is missing");
+      throw new UnauthorizedException("Отсутствует refresh token");
     }
 
     const payload = await this.verifyRefreshToken(refreshToken);
@@ -208,13 +208,13 @@ export class AuthService {
     });
 
     if (!session || session.userId !== payload.sub || session.revokedAt || session.expiresAt < new Date()) {
-      throw new UnauthorizedException("Refresh session is invalid");
+      throw new UnauthorizedException("Сессия обновления недействительна");
     }
 
     const matches = await bcrypt.compare(refreshToken, session.refreshTokenHash);
 
     if (!matches) {
-      throw new UnauthorizedException("Refresh session is invalid");
+      throw new UnauthorizedException("Сессия обновления недействительна");
     }
 
     await this.prisma.refreshToken.update({
@@ -348,7 +348,7 @@ export class AuthService {
     });
 
     if (payload.tokenType !== "refresh") {
-      throw new UnauthorizedException("Invalid refresh token");
+      throw new UnauthorizedException("Недействительный refresh token");
     }
 
     return payload;

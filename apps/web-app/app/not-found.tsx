@@ -4,16 +4,16 @@ export default function NotFound() {
   return (
     <section className="page empty-state">
       <p className="caption">404</p>
-      <h1 className="section-title">The requested page was not found.</h1>
+      <h1 className="section-title">Запрошенная страница не найдена.</h1>
       <p className="section-text">
-        The public catalog, dashboard and session pages are available from the main navigation.
+        Публичный каталог, кабинет и страницы сессий доступны из основного меню.
       </p>
       <div className="inline-actions">
         <Link className="button button-primary" href="/">
-          back to catalog
+          вернуться в каталог
         </Link>
         <Link className="button button-ghost" href="/dashboard">
-          open dashboard
+          открыть кабинет
         </Link>
       </div>
     </section>

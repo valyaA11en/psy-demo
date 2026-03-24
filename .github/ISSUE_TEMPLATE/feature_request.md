@@ -1,15 +1,15 @@
 ---
 name: Feature request
-about: Propose a new capability
+about: Предложить новую возможность
 title: "[Feature] "
 labels: enhancement
 assignees: ""
 ---
 
-## Problem
+## Проблема
 
-## Proposed solution
+## Предлагаемое решение
 
-## Scope
+## Объём
 
-## Security/privacy impact
+## Влияние на безопасность и приватность

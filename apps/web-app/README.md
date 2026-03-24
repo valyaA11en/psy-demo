@@ -1,23 +1,24 @@
 # web-app
 
-Next.js application for the public catalog, client dashboard, booking flow, mock payments, and mock session access.
+Next.js-приложение для публичного каталога, кабинета клиента, бронирования, тестовых оплат, доступа к тестовой сессии и обновления дашборда в реальном времени.
 
-## Implemented screens
+## Реализованные экраны
 
-- `/` public catalog with filters and psychologist cards
-- `/auth` login and registration
-- `/dashboard` role-aware booking and payment workspace
-- `/psychologists/[slug]` psychologist profile and slot selection
-- `/session/[consultationId]` mock video access flow
+- `/` — публичный каталог с фильтрами и карточками психологов
+- `/auth` — вход и регистрация
+- `/dashboard` — кабинет с учётом роли для бронирований и оплат
+- `/dashboard` — лента активности в реальном времени через WebSocket с автообновлением
+- `/psychologists/[slug]` — карточка психолога и выбор слота
+- `/session/[consultationId]` — тестовый сценарий доступа к видеосессии
 
-## Local setup
+## Локальный запуск
 
-1. Copy `.env.example` to `.env.local`
-2. Run:
+1. Скопировать `.env.example` в `.env.local`
+2. Выполнить:
 
 ```bash
 npm install
 npm run dev
 ```
 
-By default the app expects `api-core` at `http://localhost:4000/api/v1`.
+По умолчанию приложение ожидает `api-core` по адресу `http://localhost:4000/api/v1`, а `ws-gateway` по адресу `http://localhost:4001`.

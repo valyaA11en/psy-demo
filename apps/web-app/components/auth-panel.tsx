@@ -4,6 +4,7 @@ import Link from "next/link";
 import { startTransition, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-provider";
+import { humanizeCode } from "@/lib/format";
 
 type Mode = "login" | "register";
 type AccountType = "client" | "psychologist";
@@ -44,7 +45,7 @@ export function AuthPanel() {
 
       void action
         .then(() => {
-          setSuccess(mode === "login" ? "Session started" : "Account created");
+          setSuccess(mode === "login" ? "Сессия начата" : "Аккаунт создан");
           router.push("/dashboard");
           router.refresh();
         })
@@ -61,17 +62,17 @@ export function AuthPanel() {
     return (
       <section className="auth-layout">
         <div className="auth-card">
-          <p className="caption">You are already signed in as</p>
+          <p className="caption">Вы уже вошли как</p>
           <h1 className="section-title">{user.email}</h1>
           <p className="section-text">
-            Current roles: <strong>{user.roles.join(", ")}</strong>
+            Текущие роли: <strong>{user.roles.map(humanizeCode).join(", ")}</strong>
           </p>
           <div className="inline-actions">
             <Link className="button button-primary" href="/dashboard">
-              open dashboard
+              открыть кабинет
             </Link>
             <Link className="button button-ghost" href="/">
-              back to catalog
+              вернуться в каталог
             </Link>
           </div>
         </div>
@@ -82,20 +83,20 @@ export function AuthPanel() {
   return (
     <section className="auth-layout">
       <div className="auth-card">
-        <div className="auth-tabs" role="tablist" aria-label="Auth mode">
+        <div className="auth-tabs" role="tablist" aria-label="Режим авторизации">
           <button
             className={`auth-tab${mode === "login" ? " auth-tab-active" : ""}`}
             onClick={() => setMode("login")}
             type="button"
           >
-            sign in
+            вход
           </button>
           <button
             className={`auth-tab${mode === "register" ? " auth-tab-active" : ""}`}
             onClick={() => setMode("register")}
             type="button"
           >
-            create account
+            регистрация
           </button>
         </div>
 
@@ -112,7 +113,7 @@ export function AuthPanel() {
           </label>
 
           <label className="field">
-            <span className="field-label">password</span>
+            <span className="field-label">пароль</span>
             <input
               className="field-input"
               onChange={(event) => setPassword(event.target.value)}
@@ -125,20 +126,20 @@ export function AuthPanel() {
           {mode === "register" ? (
             <>
               <label className="field">
-                <span className="field-label">account type</span>
+                <span className="field-label">тип аккаунта</span>
                 <select
                   className="field-select"
                   onChange={(event) => setAccountType(event.target.value as AccountType)}
                   value={accountType}
                 >
-                  <option value="client">client</option>
-                  <option value="psychologist">psychologist</option>
+                  <option value="client">клиент</option>
+                  <option value="psychologist">психолог</option>
                 </select>
               </label>
 
               {accountType === "client" ? (
                 <label className="field">
-                  <span className="field-label">display name</span>
+                  <span className="field-label">отображаемое имя</span>
                   <input
                     className="field-input"
                     onChange={(event) => setDisplayName(event.target.value)}
@@ -149,7 +150,7 @@ export function AuthPanel() {
               ) : (
                 <div className="form-grid two-columns">
                   <label className="field">
-                    <span className="field-label">first name</span>
+                    <span className="field-label">имя</span>
                     <input
                       className="field-input"
                       onChange={(event) => setFirstName(event.target.value)}
@@ -158,7 +159,7 @@ export function AuthPanel() {
                     />
                   </label>
                   <label className="field">
-                    <span className="field-label">last name</span>
+                    <span className="field-label">фамилия</span>
                     <input
                       className="field-input"
                       onChange={(event) => setLastName(event.target.value)}
@@ -167,11 +168,11 @@ export function AuthPanel() {
                     />
                   </label>
                   <label className="field">
-                    <span className="field-label">public title</span>
+                    <span className="field-label">публичное описание</span>
                     <input
                       className="field-input"
                       onChange={(event) => setPublicTitle(event.target.value)}
-                      placeholder="Psychologist, CBT"
+                      placeholder="Психолог, КПТ"
                       value={publicTitle}
                     />
                   </label>
@@ -183,10 +184,10 @@ export function AuthPanel() {
 
         <div className="inline-actions">
           <button className="button button-primary" disabled={pending} onClick={handleSubmit} type="button">
-            {pending ? "processing..." : mode === "login" ? "sign in" : "create account"}
+            {pending ? "обработка..." : mode === "login" ? "войти" : "создать аккаунт"}
           </button>
           <Link className="button button-ghost" href="/">
-            back to catalog
+            вернуться в каталог
           </Link>
         </div>
 
@@ -194,7 +195,7 @@ export function AuthPanel() {
         {success ? <div className="notice notice-success">{success}</div> : null}
 
         <div className="surface surface-muted">
-          <p className="caption">Demo accounts</p>
+          <p className="caption">Демо-аккаунты</p>
           <ul className="list-block">
             <li>`client@example.com / Client12345!`</li>
             <li>`psychologist@example.com / Psychologist123!`</li>

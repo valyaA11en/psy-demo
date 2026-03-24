@@ -53,12 +53,12 @@ async function parseEnvelope<T>(response: Response) {
     const message =
       payload && "error" in payload && payload.error?.message
         ? payload.error.message
-        : "Request failed";
+        : "Запрос завершился ошибкой";
     throw new Error(message);
   }
 
   if (!payload || !("data" in payload)) {
-    throw new Error("API returned an unexpected response");
+    throw new Error("API вернул неожиданный ответ");
   }
 
   return payload.data;
@@ -205,7 +205,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       token = await refreshSession();
 
       if (!token) {
-        throw new Error("Your session has expired");
+        throw new Error("Сессия истекла");
       }
 
       response = await doFetch(token);
@@ -235,7 +235,7 @@ export function useAuth() {
   const value = useContext(AuthContext);
 
   if (!value) {
-    throw new Error("useAuth must be used inside AuthProvider");
+    throw new Error("useAuth должен использоваться внутри AuthProvider");
   }
 
   return value;

@@ -5,14 +5,14 @@ import { SiteHeader } from "@/components/site-header";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Consultations with a Psychologist",
+  title: "Консультации с психологом",
   description:
-    "Calm and privacy-oriented booking flow for online psychology consultations.",
+    "Спокойный и приватный flow записи на онлайн-консультации с психологом.",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="ru">
       <body>
         <AuthProvider>
           <div className="site-shell">

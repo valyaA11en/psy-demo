@@ -12,7 +12,12 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule, { cors: false });
   const configService = app.get(ConfigService);
   const port = configService.get<number>("PORT", 4000);
-  const webAppOrigin = configService.get<string>("WEB_APP_ORIGIN", "http://localhost:3000");
+  const webAppOrigins = parseAllowlist(
+    configService.get<string>(
+      "WEB_APP_ORIGINS",
+      configService.get<string>("WEB_APP_ORIGIN", "http://localhost:3000"),
+    ),
+  );
   const swaggerEnabled = configService.get<string>("SWAGGER_ENABLED", "true") === "true";
 
   app.setGlobalPrefix("api/v1");
@@ -34,14 +39,14 @@ async function bootstrap() {
     }),
   );
   app.enableCors({
-    origin: [webAppOrigin],
+    origin: webAppOrigins,
     credentials: true,
   });
 
   if (swaggerEnabled) {
     const swaggerConfig = new DocumentBuilder()
-      .setTitle("Consultations API Core")
-      .setDescription("Core API for consultations with a psychologist platform")
+      .setTitle("API платформы консультаций с психологом")
+      .setDescription("Основной API для платформы онлайн-консультаций с психологом")
       .setVersion("0.1.0")
       .addBearerAuth()
       .build();
@@ -50,7 +55,14 @@ async function bootstrap() {
   }
 
   await app.listen(port);
-  console.log(`API core listening on http://localhost:${port}`);
+  console.log(`API core запущен на http://localhost:${port}`);
+}
+
+function parseAllowlist(value: string) {
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
 void bootstrap();

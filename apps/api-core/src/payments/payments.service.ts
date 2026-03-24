@@ -15,6 +15,7 @@ import {
 import type { Request } from "express";
 import { AuditService } from "../audit/audit.service";
 import { PrismaService } from "../prisma/prisma.service";
+import { RealtimeService } from "../realtime/realtime.service";
 import { CreatePaymentDto } from "./dto/create-payment.dto";
 import { ListPaymentsQueryDto } from "./dto/list-payments-query.dto";
 import { MockFailPaymentDto } from "./dto/mock-fail-payment.dto";
@@ -88,6 +89,7 @@ export class PaymentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
+    private readonly realtimeService: RealtimeService,
   ) {}
 
   async createPayment(
@@ -137,16 +139,16 @@ export class PaymentsService {
     });
 
     if (!consultation) {
-      throw new NotFoundException("Consultation not found");
+      throw new NotFoundException("Консультация не найдена");
     }
 
     if (consultation.status !== ConsultationStatus.scheduled) {
-      throw new ConflictException("Only scheduled consultations can be paid");
+      throw new ConflictException("Оплачивать можно только запланированные консультации");
     }
 
     const amount = consultation.psychologist.psychologistProfile?.priceFrom;
     if (!amount || amount <= 0) {
-      throw new BadRequestException("Consultation price is not configured");
+      throw new BadRequestException("Для консультации не настроена стоимость");
     }
 
     const existingSucceeded = await this.prisma.payment.findFirst({
@@ -229,6 +231,22 @@ export class PaymentsService {
     });
 
     const payment = await this.getPaymentRecord(paymentId, true);
+    await this.realtimeService.publishSafe({
+      name: "payment.created",
+      entity: {
+        type: "payment",
+        id: paymentId,
+      },
+      audience: {
+        userIds: [payment.consultation.clientUserId, payment.consultation.psychologistUserId],
+      },
+      payload: {
+        consultationId: payment.consultationId,
+        paymentId,
+        status: payment.status,
+      },
+    });
+
     return this.serializePayment(payment, "client", true);
   }
 
@@ -292,11 +310,11 @@ export class PaymentsService {
     }
 
     if (payment.consultation.status !== ConsultationStatus.scheduled) {
-      throw new ConflictException("Only scheduled consultations can be paid");
+      throw new ConflictException("Оплачивать можно только запланированные консультации");
     }
 
     if (payment.status !== PaymentStatus.pending) {
-      throw new ConflictException("Only pending payments can be confirmed");
+      throw new ConflictException("Подтвердить можно только платёж в статусе pending");
     }
 
     await this.prisma.$transaction(async (tx) => {
@@ -338,6 +356,36 @@ export class PaymentsService {
     });
 
     const updated = await this.getPaymentRecord(paymentId, true);
+    await this.realtimeService.publishSafe({
+      name: "payment.updated",
+      entity: {
+        type: "payment",
+        id: paymentId,
+      },
+      audience: {
+        userIds: [updated.consultation.clientUserId, updated.consultation.psychologistUserId],
+      },
+      payload: {
+        consultationId: updated.consultationId,
+        paymentId,
+        status: updated.status,
+      },
+    });
+    await this.realtimeService.publishSafe({
+      name: "video.session_ready",
+      entity: {
+        type: "video_session",
+        id: updated.consultationId,
+      },
+      audience: {
+        userIds: [updated.consultation.clientUserId, updated.consultation.psychologistUserId],
+      },
+      payload: {
+        consultationId: updated.consultationId,
+        status: "payment_succeeded",
+      },
+    });
+
     return this.serializePayment(updated, this.resolveView(updated, actorUserId, roles), true);
   }
 
@@ -356,11 +404,11 @@ export class PaymentsService {
     }
 
     if (payment.status !== PaymentStatus.pending) {
-      throw new ConflictException("Only pending payments can be failed");
+      throw new ConflictException("Перевести в failed можно только платёж в статусе pending");
     }
 
     const failureCode = dto.failureCode?.trim() || "mock_declined";
-    const failureMessage = dto.failureMessage?.trim() || "Mock failure from payment sandbox";
+    const failureMessage = dto.failureMessage?.trim() || "Тестовый отказ из платёжной песочницы";
 
     await this.prisma.$transaction(async (tx) => {
       await tx.payment.update({
@@ -400,6 +448,22 @@ export class PaymentsService {
     });
 
     const updated = await this.getPaymentRecord(paymentId, true);
+    await this.realtimeService.publishSafe({
+      name: "payment.updated",
+      entity: {
+        type: "payment",
+        id: paymentId,
+      },
+      audience: {
+        userIds: [updated.consultation.clientUserId, updated.consultation.psychologistUserId],
+      },
+      payload: {
+        consultationId: updated.consultationId,
+        paymentId,
+        status: updated.status,
+      },
+    });
+
     return this.serializePayment(updated, this.resolveView(updated, actorUserId, roles), true);
   }
 
@@ -417,7 +481,7 @@ export class PaymentsService {
     }
 
     if (payment.status !== PaymentStatus.pending) {
-      throw new ConflictException("Only pending payments can be cancelled");
+      throw new ConflictException("Отменить можно только платёж в статусе pending");
     }
 
     await this.prisma.$transaction(async (tx) => {
@@ -456,6 +520,22 @@ export class PaymentsService {
     });
 
     const updated = await this.getPaymentRecord(paymentId, true);
+    await this.realtimeService.publishSafe({
+      name: "payment.updated",
+      entity: {
+        type: "payment",
+        id: paymentId,
+      },
+      audience: {
+        userIds: [updated.consultation.clientUserId, updated.consultation.psychologistUserId],
+      },
+      payload: {
+        consultationId: updated.consultationId,
+        paymentId,
+        status: updated.status,
+      },
+    });
+
     return this.serializePayment(updated, this.resolveView(updated, actorUserId, roles), true);
   }
 
@@ -478,7 +558,7 @@ export class PaymentsService {
     });
 
     if (!payment) {
-      throw new NotFoundException("Payment not found");
+      throw new NotFoundException("Платёж не найден");
     }
 
     return payment;
@@ -486,7 +566,7 @@ export class PaymentsService {
 
   private assertClientOwnership(payment: PaymentListRecord | PaymentDetailRecord, clientUserId: string) {
     if (payment.consultation.clientUserId !== clientUserId) {
-      throw new ForbiddenException("You do not have access to this payment");
+      throw new ForbiddenException("У вас нет доступа к этому платежу");
     }
   }
 
@@ -507,7 +587,7 @@ export class PaymentsService {
       return "admin";
     }
 
-    throw new ForbiddenException("You do not have access to this payment");
+    throw new ForbiddenException("У вас нет доступа к этому платежу");
   }
 
   private resolveClientOrAdminRole(
@@ -527,18 +607,18 @@ export class PaymentsService {
       return "admin";
     }
 
-    throw new ForbiddenException("Only the client or admin can operate this payment");
+    throw new ForbiddenException("Только клиент или администратор может выполнять это действие с платежом");
   }
 
   private normalizeIdempotencyKey(value: string | undefined) {
     const normalized = value?.trim();
 
     if (!normalized) {
-      throw new BadRequestException("Idempotency-Key header is required");
+      throw new BadRequestException("Заголовок Idempotency-Key обязателен");
     }
 
     if (!/^[A-Za-z0-9._:-]{8,128}$/.test(normalized)) {
-      throw new BadRequestException("Idempotency-Key format is invalid");
+      throw new BadRequestException("Некорректный формат Idempotency-Key");
     }
 
     return normalized;

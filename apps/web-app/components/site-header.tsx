@@ -5,9 +5,9 @@ import { usePathname } from "next/navigation";
 import { AuthStatus } from "@/components/auth-status";
 
 const links = [
-  { href: "/", label: "catalog" },
-  { href: "/dashboard", label: "dashboard" },
-  { href: "/auth", label: "auth" },
+  { href: "/", label: "каталог" },
+  { href: "/dashboard", label: "кабинет" },
+  { href: "/auth", label: "вход" },
 ];
 
 export function SiteHeader() {
@@ -18,8 +18,8 @@ export function SiteHeader() {
       <Link className="brand" href="/">
         <span className="brand-mark">CP</span>
         <span className="brand-copy">
-          <span className="brand-eyebrow">consultations with a psychologist</span>
-          <span className="brand-title">calm booking flow</span>
+          <span className="brand-eyebrow">консультации с психологом</span>
+          <span className="brand-title">спокойный и понятный путь записи</span>
         </span>
       </Link>
 
