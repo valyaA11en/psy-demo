@@ -1,15 +1,15 @@
 {
   "name": "consultations-api-core",
   "version": "0.1.0",
-  "description": "NestJS core API for auth, catalog, bookings, payments orchestration, files, consent, and audit.",
+  "description": "Основной NestJS API для аутентификации, каталога, бронирований, оплат, файлов, consent и аудита.",
   "main": "dist/main.js",
   "scripts": {
     "build": "prisma generate && nest build",
     "start": "node dist/main",
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
-    "lint": "node -e \"console.log('Lint configuration will be added with the next implementation pass')\"",
-    "test": "node -e \"console.log('Tests are not configured yet')\"",
+    "lint": "node -e \"console.log('Конфигурация lint будет добавлена на следующем проходе по реализации')\"",
+    "test": "node -e \"console.log('Тесты пока не настроены')\"",
     "prisma:generate": "prisma generate",
     "prisma:migrate:dev": "prisma migrate dev",
     "prisma:push": "prisma db push",
@@ -19,9 +19,6 @@
   "author": "Codex",
   "license": "MIT",
   "type": "commonjs",
-  "prisma": {
-    "seed": "tsx prisma/seed.ts"
-  },
   "dependencies": {
     "@nestjs/common": "^11.1.17",
     "@nestjs/config": "^4.0.3",
@@ -37,6 +34,7 @@
     "class-validator": "^0.14.4",
     "cookie-parser": "^1.4.7",
     "helmet": "^8.1.0",
+    "ioredis": "^5.8.2",
     "luxon": "^3.7.2",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
@@ -50,6 +48,7 @@
     "@types/bcryptjs": "^2.4.6",
     "@types/cookie-parser": "^1.4.10",
     "@types/express": "^5.0.6",
+    "@types/luxon": "^3.7.1",
     "@types/passport-jwt": "^4.0.1",
     "@types/supertest": "^7.2.0",
     "eslint": "^10.1.0",

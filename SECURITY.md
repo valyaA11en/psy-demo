@@ -1,28 +1,28 @@
-# Security Policy
+# Политика безопасности
 
 ## Scope
 
-This platform handles potentially sensitive psychological consultation data. Security issues must be treated with high priority.
+Платформа работает с потенциально чувствительными данными психологических консультаций. Любые security-вопросы здесь имеют высокий приоритет.
 
-## Reporting
+## Сообщение о проблемах
 
-- Do not open public issues for vulnerabilities.
-- Report privately to the project maintainer.
-- Include reproduction steps, impact, and affected components.
+- не публикуйте уязвимости в открытых issue
+- сообщайте о проблеме приватно владельцу проекта
+- прикладывайте шаги воспроизведения, оценку влияния и список затронутых компонентов
 
-## Sensitive areas
+## Чувствительные зоны
 
-- authentication and session handling
-- RBAC and ownership checks
-- payments and webhooks
-- file uploads and signed URLs
-- complaint/review/private consultation data
-- admin actions and audit logging
+- аутентификация и управление сессиями
+- RBAC и ownership checks
+- оплаты и webhooks
+- загрузка файлов и signed URLs
+- жалобы, отзывы и приватные данные консультаций
+- действия администраторов и audit logging
 
-## Security baseline
+## Базовый security baseline
 
-- secrets are never committed
-- refresh tokens are rotated
-- admin actions are audited
-- Redis/Postgres are not exposed publicly
-- sensitive logs are masked/redacted
+- секреты никогда не коммитятся в Git
+- refresh tokens ротируются
+- действия администраторов аудитируются
+- Redis и Postgres не публикуются наружу
+- чувствительные логи маскируются или редактируются

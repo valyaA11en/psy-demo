@@ -1,17 +1,17 @@
 ---
 name: Bug report
-about: Report a defect or regression
+about: Сообщить о дефекте или регрессии
 title: "[Bug] "
 labels: bug
 assignees: ""
 ---
 
-## Description
+## Описание
 
-## Steps to reproduce
+## Шаги воспроизведения
 
-## Expected behavior
+## Ожидаемое поведение
 
-## Actual behavior
+## Фактическое поведение
 
-## Impact
+## Влияние

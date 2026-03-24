@@ -22,12 +22,12 @@ async function parseResponse<T>(response: Response) {
     const message =
       payload && "error" in payload && payload.error?.message
         ? payload.error.message
-        : "Request failed";
+        : "Запрос завершился ошибкой";
     throw new Error(message);
   }
 
   if (!payload || !("data" in payload)) {
-    throw new Error("API returned an unexpected response");
+    throw new Error("API вернул неожиданный ответ");
   }
 
   return payload.data;

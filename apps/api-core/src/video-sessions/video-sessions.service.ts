@@ -69,26 +69,26 @@ export class VideoSessionsService {
     const readyConsultation = await this.ensureProvisionedIfEligible(consultation);
 
     if (readyConsultation.status !== ConsultationStatus.scheduled) {
-      throw new ConflictException("Video access is available only for scheduled consultations");
+      throw new ConflictException("Доступ к видео доступен только для запланированных консультаций");
     }
 
     if (!this.hasSucceededPayment(readyConsultation)) {
-      throw new ConflictException("Video access requires a successful payment");
+      throw new ConflictException("Для доступа к видео нужна успешная оплата");
     }
 
     const window = this.resolveAccessWindow(readyConsultation);
     const now = DateTime.utc();
 
     if (now < window.opensAt) {
-      throw new ConflictException(`Video access opens at ${window.opensAt.toISO()}`);
+      throw new ConflictException(`Доступ к видео откроется в ${window.opensAt.toISO()}`);
     }
 
     if (now > window.closesAt) {
-      throw new ConflictException("Video access window has expired");
+      throw new ConflictException("Окно доступа к видео истекло");
     }
 
     if (!readyConsultation.meetingRoomId || !readyConsultation.meetingProvider) {
-      throw new ConflictException("Video session is not provisioned");
+      throw new ConflictException("Видеосессия ещё не подготовлена");
     }
 
     const ttl = Number(this.configService.get<string>("VIDEO_ACCESS_TTL", "900"));
@@ -145,7 +145,7 @@ export class VideoSessionsService {
     });
 
     if (!consultation) {
-      throw new NotFoundException("Consultation not found");
+      throw new NotFoundException("Консультация не найдена");
     }
 
     return consultation;
@@ -165,12 +165,10 @@ export class VideoSessionsService {
     }
 
     if (roles.includes("admin") || roles.includes("superadmin")) {
-      throw new ForbiddenException(
-        "Admins cannot access consultation session links or video room tokens",
-      );
+      throw new ForbiddenException("Администраторам запрещён доступ к ссылкам на сессию и токенам видеокомнаты");
     }
 
-    throw new ForbiddenException("You do not have access to this consultation session");
+    throw new ForbiddenException("У вас нет доступа к этой консультационной сессии");
   }
 
   private async ensureProvisionedIfEligible(consultation: ConsultationRecord) {

@@ -14,6 +14,7 @@ import { HealthModule } from "./health/health.module";
 import { PaymentsModule } from "./payments/payments.module";
 import { PsychologistsModule } from "./psychologists/psychologists.module";
 import { PrismaModule } from "./prisma/prisma.module";
+import { RealtimeModule } from "./realtime/realtime.module";
 import { UsersModule } from "./users/users.module";
 import { VideoSessionsModule } from "./video-sessions/video-sessions.module";
 
@@ -35,6 +36,7 @@ import { VideoSessionsModule } from "./video-sessions/video-sessions.module";
     }),
     PrismaModule,
     AuditModule,
+    RealtimeModule,
     HealthModule,
     AuthModule,
     AvailabilityModule,

@@ -124,7 +124,7 @@ export class AvailabilityService {
     });
 
     if (!existing) {
-      throw new NotFoundException("Availability rule not found");
+      throw new NotFoundException("Правило доступности не найдено");
     }
 
     const timezone = dto.timezone ?? existing.timezone;
@@ -168,7 +168,7 @@ export class AvailabilityService {
     });
 
     if (!existing) {
-      throw new NotFoundException("Availability rule not found");
+      throw new NotFoundException("Правило доступности не найдено");
     }
 
     await this.prisma.availabilityRule.delete({
@@ -228,7 +228,7 @@ export class AvailabilityService {
 
     const overlap = await this.findActiveOverlap(userId, startsAt.toJSDate(), endsAt.toJSDate());
     if (overlap) {
-      throw new ConflictException("Slot overlaps with an existing active slot");
+      throw new ConflictException("Слот пересекается с уже существующим активным слотом");
     }
 
     const slot = await this.prisma.appointmentSlot.create({
@@ -260,11 +260,11 @@ export class AvailabilityService {
     });
 
     if (!slot) {
-      throw new NotFoundException("Appointment slot not found");
+      throw new NotFoundException("Слот записи не найден");
     }
 
     if (slot.status === AppointmentSlotStatus.booked || slot.status === AppointmentSlotStatus.held) {
-      throw new ConflictException("Booked or held slot cannot be cancelled directly");
+      throw new ConflictException("Забронированный или удерживаемый слот нельзя отменить напрямую");
     }
 
     const updated = await this.prisma.appointmentSlot.update({
@@ -292,7 +292,7 @@ export class AvailabilityService {
     });
 
     if (rules.length === 0) {
-      throw new BadRequestException("No active availability rules found");
+      throw new BadRequestException("Активные правила доступности не найдены");
     }
 
     const utcRange = this.resolveUtcWindow(dateRange.startDate, dateRange.endDate);
@@ -428,7 +428,7 @@ export class AvailabilityService {
     });
 
     if (!profile) {
-      throw new NotFoundException("Psychologist not found");
+      throw new NotFoundException("Психолог не найден");
     }
 
     const range = this.resolveQueryRange(query, {
@@ -481,7 +481,7 @@ export class AvailabilityService {
     });
 
     if (!profile) {
-      throw new NotFoundException("Psychologist profile not found");
+      throw new NotFoundException("Профиль психолога не найден");
     }
 
     return profile;
@@ -522,16 +522,16 @@ export class AvailabilityService {
       : startLocal.plus({ days: options.defaultDays - 1 }).endOf("day");
 
     if (!startLocal.isValid || !endLocal.isValid) {
-      throw new BadRequestException("Invalid date range");
+      throw new BadRequestException("Некорректный диапазон дат");
     }
 
     const days = Math.floor(endLocal.diff(startLocal, "days").days) + 1;
     if (endLocal < startLocal) {
-      throw new BadRequestException("dateTo must be greater than or equal to dateFrom");
+      throw new BadRequestException("dateTo должно быть больше или равно dateFrom");
     }
 
     if (days > options.maxDays) {
-      throw new BadRequestException(`Date range cannot exceed ${options.maxDays} days`);
+      throw new BadRequestException(`Диапазон дат не может превышать ${options.maxDays} дней`);
     }
 
     return {
@@ -548,16 +548,16 @@ export class AvailabilityService {
     const endDate = DateTime.fromISO(dateTo, { zone: "utc" }).startOf("day");
 
     if (!startDate.isValid || !endDate.isValid) {
-      throw new BadRequestException("Invalid generation date range");
+      throw new BadRequestException("Некорректный диапазон дат для генерации");
     }
 
     if (endDate < startDate) {
-      throw new BadRequestException("dateTo must be greater than or equal to dateFrom");
+      throw new BadRequestException("dateTo должно быть больше или равно dateFrom");
     }
 
     const days = Math.floor(endDate.diff(startDate, "days").days) + 1;
     if (days > maxDays) {
-      throw new BadRequestException(`Generation range cannot exceed ${maxDays} days`);
+      throw new BadRequestException(`Диапазон генерации не может превышать ${maxDays} дней`);
     }
 
     return {
@@ -583,7 +583,7 @@ export class AvailabilityService {
     });
 
     if (!value.isValid) {
-      throw new BadRequestException("Invalid local date or time");
+      throw new BadRequestException("Некорректная локальная дата или время");
     }
 
     return value;
@@ -599,7 +599,7 @@ export class AvailabilityService {
 
   private assertTimezone(timezone: string) {
     if (!DateTime.now().setZone(timezone).isValid) {
-      throw new BadRequestException("Invalid timezone");
+      throw new BadRequestException("Некорректная timezone");
     }
   }
 
@@ -613,30 +613,30 @@ export class AvailabilityService {
     const end = DateTime.fromFormat(endTime, "HH:mm", { zone: "utc" });
 
     if (!start.isValid || !end.isValid || end <= start) {
-      throw new BadRequestException("Availability end time must be greater than start time");
+      throw new BadRequestException("Время окончания доступности должно быть больше времени начала");
     }
 
     const windowMinutes = end.diff(start, "minutes").minutes;
     if (windowMinutes < slotDurationMin) {
-      throw new BadRequestException("Availability window is shorter than the slot duration");
+      throw new BadRequestException("Окно доступности короче длительности слота");
     }
 
     if (bufferMin < 0) {
-      throw new BadRequestException("Buffer cannot be negative");
+      throw new BadRequestException("Буфер не может быть отрицательным");
     }
   }
 
   private assertSlotRange(startsAt: DateTime, endsAt: DateTime) {
     if (!startsAt.isValid || !endsAt.isValid) {
-      throw new BadRequestException("Invalid slot timestamps");
+      throw new BadRequestException("Некорректные временные метки слота");
     }
 
     if (endsAt <= startsAt) {
-      throw new BadRequestException("Slot end time must be greater than start time");
+      throw new BadRequestException("Время окончания слота должно быть больше времени начала");
     }
 
     if (startsAt <= DateTime.utc()) {
-      throw new BadRequestException("Cannot create a slot in the past");
+      throw new BadRequestException("Нельзя создать слот в прошлом");
     }
   }
 

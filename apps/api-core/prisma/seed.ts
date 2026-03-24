@@ -38,10 +38,10 @@ async function assignRole(userId: string, roleId: string) {
 
 async function main() {
   const [clientRole, psychologistRole, adminRole, superadminRole] = await Promise.all([
-    ensureRole("client", "Client"),
-    ensureRole("psychologist", "Psychologist"),
-    ensureRole("admin", "Administrator"),
-    ensureRole("superadmin", "Superadmin"),
+    ensureRole("client", "Клиент"),
+    ensureRole("psychologist", "Психолог"),
+    ensureRole("admin", "Администратор"),
+    ensureRole("superadmin", "Суперадмин"),
   ]);
 
   const adminPassword = await bcrypt.hash("Admin12345!", 10);
@@ -104,7 +104,7 @@ async function main() {
       displayName: "Irina",
       timezone: "Asia/Yekaterinburg",
       preferencesJson: {
-        communicationLanguage: "en",
+        communicationLanguage: "ru",
       },
     },
     create: {
@@ -112,7 +112,7 @@ async function main() {
       displayName: "Irina",
       timezone: "Asia/Yekaterinburg",
       preferencesJson: {
-        communicationLanguage: "en",
+        communicationLanguage: "ru",
       },
     },
   });
@@ -123,8 +123,8 @@ async function main() {
       publicSlug: "anna-kovaleva",
       firstName: "Anna",
       lastName: "Kovaleva",
-      publicTitle: "Psychologist, CBT",
-      bio: "Works with anxiety, burnout, and self-esteem challenges.",
+      publicTitle: "Психолог, КПТ",
+      bio: "Работает с тревогой, выгоранием и вопросами самооценки.",
       experienceYears: 6,
       priceFrom: 3500,
       priceTo: 5000,
@@ -138,8 +138,8 @@ async function main() {
       publicSlug: "anna-kovaleva",
       firstName: "Anna",
       lastName: "Kovaleva",
-      publicTitle: "Psychologist, CBT",
-      bio: "Works with anxiety, burnout, and self-esteem challenges.",
+      publicTitle: "Психолог, КПТ",
+      bio: "Работает с тревогой, выгоранием и вопросами самооценки.",
       experienceYears: 6,
       priceFrom: 3500,
       priceTo: 5000,
@@ -152,19 +152,19 @@ async function main() {
 
   const anxiety = await prisma.specialization.upsert({
     where: { slug: "anxiety" },
-    update: { name: "Anxiety" },
+    update: { name: "Тревога" },
     create: {
       slug: "anxiety",
-      name: "Anxiety",
+      name: "Тревога",
     },
   });
 
   const burnout = await prisma.specialization.upsert({
     where: { slug: "burnout" },
-    update: { name: "Burnout" },
+    update: { name: "Выгорание" },
     create: {
       slug: "burnout",
-      name: "Burnout",
+      name: "Выгорание",
     },
   });
 
@@ -309,7 +309,7 @@ async function main() {
       slotId: bookedSlot.id,
       status: ConsultationStatus.scheduled,
       scheduledAt: bookedSlot.startsAt,
-      clientMessage: "Need help with burnout and work stress.",
+      clientMessage: "Нужна помощь с выгоранием и рабочим стрессом.",
       idempotencyKey: "seed-booking-0001",
     },
   });

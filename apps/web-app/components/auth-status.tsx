@@ -12,14 +12,14 @@ export function AuthStatus() {
   const [error, setError] = useState<string | null>(null);
 
   if (!ready) {
-    return <div className="auth-chip">authorizing...</div>;
+    return <div className="auth-chip">авторизация...</div>;
   }
 
   if (!user) {
     return (
       <div className="auth-actions">
         <Link className="button button-ghost button-small" href="/auth">
-          sign in
+          войти
         </Link>
       </div>
     );
@@ -46,10 +46,10 @@ export function AuthStatus() {
         <strong>{user.roles.join(", ")}</strong>
       </div>
       <Link className="button button-secondary button-small" href="/dashboard">
-        dashboard
+        кабинет
       </Link>
       <button className="button button-ghost button-small" onClick={handleLogout} type="button">
-        logout
+        выйти
       </button>
       {error ? <p className="caption error-inline">{error}</p> : null}
     </div>

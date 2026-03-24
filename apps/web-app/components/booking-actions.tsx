@@ -28,23 +28,23 @@ export function BookingActions({ psychologistName, slots }: BookingActionsProps)
   if (slots.length === 0) {
     return (
       <div className="surface">
-        <p className="section-text">No open slots published yet.</p>
+        <p className="section-text">Свободные слоты пока не опубликованы.</p>
       </div>
     );
   }
 
   if (!ready) {
-    return <div className="surface">Checking session...</div>;
+    return <div className="surface">Проверяем сессию...</div>;
   }
 
   if (!user) {
     return (
       <div className="surface">
         <p className="section-text">
-          Sign in as a client to book a slot with <strong>{psychologistName}</strong>.
+          Войдите как клиент, чтобы записаться к <strong>{psychologistName}</strong>.
         </p>
         <Link className="button button-primary" href="/auth">
-          sign in to book
+          войти и записаться
         </Link>
       </div>
     );
@@ -53,7 +53,7 @@ export function BookingActions({ psychologistName, slots }: BookingActionsProps)
   if (!user.roles.includes("client")) {
     return (
       <div className="surface">
-        <p className="section-text">Booking is available only for client accounts.</p>
+        <p className="section-text">Запись доступна только клиентским аккаунтам.</p>
       </div>
     );
   }
@@ -78,7 +78,7 @@ export function BookingActions({ psychologistName, slots }: BookingActionsProps)
         }),
       })
         .then((result) => {
-          setSuccess(`Booking ${result.id} created`);
+          setSuccess(`Бронирование ${result.id} создано`);
           router.push("/dashboard");
           router.refresh();
         })
@@ -94,8 +94,8 @@ export function BookingActions({ psychologistName, slots }: BookingActionsProps)
   return (
     <div className="surface stack">
       <div>
-        <p className="caption">Choose a slot and create a booking.</p>
-        <h3 className="card-title">Available slots</h3>
+        <p className="caption">Выберите слот и создайте бронирование.</p>
+        <h3 className="card-title">Доступные слоты</h3>
       </div>
 
       <div className="slot-selector">
@@ -118,16 +118,16 @@ export function BookingActions({ psychologistName, slots }: BookingActionsProps)
 
       {selectedSlot ? (
         <p className="section-text">
-          Selected: <strong>{formatDateRange(selectedSlot.startsAt, selectedSlot.endsAt)}</strong>
+          Выбрано: <strong>{formatDateRange(selectedSlot.startsAt, selectedSlot.endsAt)}</strong>
         </p>
       ) : null}
 
       <div className="inline-actions">
         <button className="button button-primary" disabled={pending} onClick={handleBook} type="button">
-          {pending ? "booking..." : "book consultation"}
+          {pending ? "бронируем..." : "записаться"}
         </button>
         <Link className="button button-ghost" href="/dashboard">
-          open dashboard
+          открыть кабинет
         </Link>
       </div>
 

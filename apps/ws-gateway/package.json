@@ -1,0 +1,44 @@
+{
+  "name": "consultations-ws-gateway",
+  "version": "0.1.0",
+  "private": true,
+  "description": "NestJS WebSocket gateway для доменных событий в реальном времени.",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "nest build",
+    "start": "node dist/main",
+    "start:dev": "nest start --watch",
+    "start:debug": "nest start --debug --watch",
+    "lint": "node -e \"console.log('Конфигурация lint будет добавлена на следующем проходе по реализации')\"",
+    "test": "node -e \"console.log('Тесты пока не настроены')\""
+  },
+  "license": "MIT",
+  "type": "commonjs",
+  "dependencies": {
+    "@nestjs/common": "^11.1.17",
+    "@nestjs/config": "^4.0.3",
+    "@nestjs/core": "^11.1.17",
+    "@nestjs/jwt": "^11.0.2",
+    "@nestjs/platform-express": "^11.1.17",
+    "@nestjs/platform-socket.io": "^11.1.17",
+    "@nestjs/websockets": "^11.1.17",
+    "helmet": "^8.1.0",
+    "ioredis": "^5.8.2",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2",
+    "socket.io": "^4.8.1"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^11.0.16",
+    "@nestjs/schematics": "^11.0.9",
+    "@nestjs/testing": "^11.1.17",
+    "@types/express": "^5.0.6",
+    "@types/node": "^24.5.2",
+    "eslint": "^10.1.0",
+    "prettier": "^3.8.1",
+    "source-map-support": "^0.5.21",
+    "ts-node": "^10.9.2",
+    "tsconfig-paths": "^4.2.0",
+    "typescript": "^5.9.3"
+  }
+}

@@ -8,7 +8,7 @@ export class MockFailPaymentDto {
   @MaxLength(64)
   failureCode?: string;
 
-  @ApiPropertyOptional({ example: "Mock decline from test payment flow" })
+  @ApiPropertyOptional({ example: "Тестовый отказ из сценария оплаты" })
   @IsOptional()
   @IsString()
   @MaxLength(500)

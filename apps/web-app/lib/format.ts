@@ -14,7 +14,7 @@ const shortDateFormatter = new Intl.DateTimeFormat("ru-RU", {
 
 export function formatMoney(amount: number | null | undefined, currency = "RUB") {
   if (typeof amount !== "number") {
-    return "price on request";
+    return "цена по запросу";
   }
 
   return new Intl.NumberFormat("ru-RU", {
@@ -26,7 +26,7 @@ export function formatMoney(amount: number | null | undefined, currency = "RUB")
 
 export function formatDateTime(value: string | null | undefined) {
   if (!value) {
-    return "not available";
+    return "недоступно";
   }
 
   return dateFormatter.format(new Date(value));
@@ -34,7 +34,7 @@ export function formatDateTime(value: string | null | undefined) {
 
 export function formatCompactDateTime(value: string | null | undefined) {
   if (!value) {
-    return "not available";
+    return "недоступно";
   }
 
   return shortDateFormatter.format(new Date(value));
@@ -52,8 +52,49 @@ export function formatDateRange(start: string, end: string) {
 
 export function humanizeCode(value: string | null | undefined) {
   if (!value) {
-    return "not specified";
+    return "не указано";
   }
+  const dictionary: Record<string, string> = {
+    client: "клиент",
+    psychologist: "психолог",
+    admin: "администратор",
+    superadmin: "суперадмин",
+    open: "свободен",
+    held: "в резерве",
+    booked: "забронирован",
+    blocked: "заблокирован",
+    cancelled: "отменён",
+    scheduled: "запланирована",
+    completed: "завершена",
+    pending: "ожидает",
+    succeeded: "успешно",
+    failed: "ошибка",
+    refunded: "возврат",
+    draft: "черновик",
+    pending_review: "на модерации",
+    approved: "одобрен",
+    rejected: "отклонён",
+    online: "онлайн",
+    offline: "офлайн",
+    idle: "ожидание",
+    connecting: "подключение",
+    connected: "подключено",
+    consultation: "консультация",
+    payment: "платёж",
+    video_session: "видеосессия",
+    booking: "бронирование",
+    paid: "оплачено",
+    payment_required: "требуется оплата",
+    mock_video: "тестовый провайдер",
+    ru: "русский",
+    en: "английский",
+    "booking.created": "создано бронирование",
+    "booking.cancelled": "бронирование отменено",
+    "booking.completed": "консультация завершена",
+    "payment.created": "создан платёж",
+    "payment.updated": "обновлён платёж",
+    "video.session_ready": "видеосессия готова",
+  };
 
-  return value.replaceAll("_", " ");
+  return dictionary[value] ?? value.replaceAll("_", " ").replaceAll(".", " ");
 }

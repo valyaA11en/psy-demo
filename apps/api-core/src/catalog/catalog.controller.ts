@@ -18,7 +18,7 @@ export class CatalogController {
     const result = await this.catalogService.getPsychologistBySlug(slug);
 
     if (!result) {
-      throw new NotFoundException("Psychologist not found");
+      throw new NotFoundException("Психолог не найден");
     }
 
     return result;

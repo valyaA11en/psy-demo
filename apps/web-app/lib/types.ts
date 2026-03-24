@@ -263,3 +263,32 @@ export type VideoAccessPayload = {
   expiresInSec: number;
   joinUrl: string;
 };
+
+export type RealtimeDomainEvent = {
+  id: string;
+  version: 1;
+  name:
+    | "booking.created"
+    | "booking.cancelled"
+    | "booking.completed"
+    | "payment.created"
+    | "payment.updated"
+    | "video.session_ready";
+  occurredAt: string;
+  entity: {
+    type: "consultation" | "payment" | "video_session";
+    id: string;
+  };
+  audience: {
+    userIds: string[];
+    roles?: string[];
+  };
+  payload: {
+    consultationId?: string;
+    paymentId?: string;
+    status?: string;
+    reasonCode?: string;
+    requiresRefetch: true;
+    source: "api-core";
+  };
+};

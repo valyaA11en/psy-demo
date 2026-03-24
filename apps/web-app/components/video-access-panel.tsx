@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { startTransition, useEffect, useEffectEvent, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
-import { formatCompactDateTime } from "@/lib/format";
+import { formatCompactDateTime, humanizeCode } from "@/lib/format";
 import type { SessionInfo, VideoAccessPayload } from "@/lib/types";
 
 type VideoAccessPanelProps = {
@@ -40,16 +40,16 @@ export function VideoAccessPanel({ consultationId }: VideoAccessPanelProps) {
   }, [consultationId, ready, user]);
 
   if (!ready) {
-    return <section className="page">Checking session...</section>;
+    return <section className="page">Проверяем сессию...</section>;
   }
 
   if (!user) {
     return (
       <section className="page empty-state">
-        <h1 className="section-title">Sign in first</h1>
-        <p className="section-text">Only consultation participants can request a session access token.</p>
+        <h1 className="section-title">Сначала войдите в систему</h1>
+        <p className="section-text">Только участники консультации могут запросить токен доступа к сессии.</p>
         <Link className="button button-primary" href="/auth">
-          open auth
+          открыть вход
         </Link>
       </section>
     );
@@ -66,7 +66,7 @@ export function VideoAccessPanel({ consultationId }: VideoAccessPanelProps) {
       setAccess(payload);
       await loadSession();
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "Unable to request access");
+      setError(nextError instanceof Error ? nextError.message : "Не удалось запросить доступ");
     } finally {
       setPending(false);
     }
@@ -76,12 +76,12 @@ export function VideoAccessPanel({ consultationId }: VideoAccessPanelProps) {
     <section className="page stack">
       <div className="section-head">
         <div>
-          <p className="caption">Mock session access</p>
-          <h1 className="section-title">Consultation session</h1>
-          <p className="section-text">Consultation id: {consultationId}</p>
+          <p className="caption">Тестовый доступ к сессии</p>
+          <h1 className="section-title">Сессия консультации</h1>
+          <p className="section-text">ID консультации: {consultationId}</p>
         </div>
         <Link className="button button-ghost" href="/dashboard">
-          back to dashboard
+          вернуться в кабинет
         </Link>
       </div>
 
@@ -92,19 +92,19 @@ export function VideoAccessPanel({ consultationId }: VideoAccessPanelProps) {
           <div className="surface stack">
             <div className="meta-row">
               <span className={`status-badge status-${session.consultationStatus}`}>
-                {session.consultationStatus.replaceAll("_", " ")}
+                {humanizeCode(session.consultationStatus)}
               </span>
               <span className={`status-badge status-${session.paymentStatus}`}>
-                {session.paymentStatus.replaceAll("_", " ")}
+                {humanizeCode(session.paymentStatus)}
               </span>
             </div>
 
             <div className="list-block">
-              <div>scheduled: {formatCompactDateTime(session.scheduledAt)}</div>
-              <div>room provider: {session.provider ?? "not provisioned yet"}</div>
-              <div>room id: {session.roomId ?? "not provisioned yet"}</div>
-              <div>access opens: {formatCompactDateTime(session.accessWindow.opensAt)}</div>
-              <div>access closes: {formatCompactDateTime(session.accessWindow.closesAt)}</div>
+              <div>запланировано: {formatCompactDateTime(session.scheduledAt)}</div>
+              <div>провайдер комнаты: {session.provider ? humanizeCode(session.provider) : "ещё не создан"}</div>
+              <div>ID комнаты: {session.roomId ?? "ещё не создан"}</div>
+              <div>доступ откроется: {formatCompactDateTime(session.accessWindow.opensAt)}</div>
+              <div>доступ закроется: {formatCompactDateTime(session.accessWindow.closesAt)}</div>
             </div>
 
             <div className="inline-actions">
@@ -114,33 +114,33 @@ export function VideoAccessPanel({ consultationId }: VideoAccessPanelProps) {
                 onClick={() => void requestAccess()}
                 type="button"
               >
-                {pending ? "issuing token..." : "request access token"}
+                {pending ? "выпускаем токен..." : "запросить токен доступа"}
               </button>
               {session.joinUrl ? (
                 <a className="button button-secondary" href={session.joinUrl} rel="noreferrer" target="_blank">
-                  open mock join page
+                  открыть тестовую страницу подключения
                 </a>
               ) : null}
             </div>
           </div>
 
           <div className="surface stack">
-            <p className="caption">Session policy</p>
+            <p className="caption">Политика доступа</p>
             <ul className="list-block">
-              <li>participants only: {session.accessPolicy.participantsOnly ? "yes" : "no"}</li>
-              <li>successful payment required: {session.accessPolicy.requiresSucceededPayment ? "yes" : "no"}</li>
-              <li>opens {session.accessPolicy.opensBeforeStartMinutes} min before start</li>
-              <li>closes {session.accessPolicy.closesAfterEndMinutes} min after end</li>
+              <li>только участники: {session.accessPolicy.participantsOnly ? "да" : "нет"}</li>
+              <li>нужна успешная оплата: {session.accessPolicy.requiresSucceededPayment ? "да" : "нет"}</li>
+              <li>открывается за {session.accessPolicy.opensBeforeStartMinutes} мин до начала</li>
+              <li>закрывается через {session.accessPolicy.closesAfterEndMinutes} мин после окончания</li>
             </ul>
 
             {access ? (
               <div className="surface surface-muted stack">
-                <p className="caption">Access token issued</p>
+                <p className="caption">Токен доступа выпущен</p>
                 <p className="token-preview">
                   {access.accessToken.slice(0, 18)}...{access.accessToken.slice(-10)}
                 </p>
                 <p className="section-text">
-                  Expires at <strong>{formatCompactDateTime(access.expiresAt)}</strong>
+                  Истекает в <strong>{formatCompactDateTime(access.expiresAt)}</strong>
                 </p>
                 <a className="muted-link" href={access.joinUrl} rel="noreferrer" target="_blank">
                   {access.joinUrl}
@@ -150,7 +150,7 @@ export function VideoAccessPanel({ consultationId }: VideoAccessPanelProps) {
           </div>
         </div>
       ) : (
-        <div className="surface">Loading session metadata...</div>
+        <div className="surface">Загружаем метаданные сессии...</div>
       )}
     </section>
   );

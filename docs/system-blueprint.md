@@ -1,188 +1,163 @@
-# Consultations with a Psychologist: System Blueprint
+# Консультации с психологом: system blueprint
 
 ## 1. Краткая концепция проекта
 
-`Consultations with a Psychologist` — full-stack web-платформа для записи на онлайн-консультации с психологами. Цель MVP: дать клиенту безопасный и понятный flow записи, психологу — рабочий кабинет с расписанием и консультациями, администратору — инструменты модерации и аудита без избыточного доступа к чувствительным данным.
+`Consultations with a Psychologist` — полнофункциональная веб-платформа для онлайн-консультаций с психологами. MVP должен позволять клиенту быстро и безопасно находить специалиста, бронировать время, оплачивать консультацию, получать уведомления и подключаться к онлайн-сессии. Психолог получает рабочий кабинет с профилем, расписанием, слотами и списком консультаций. Администратор получает отдельную админ-панель для модерации, жалоб, управления пользователями и аудита.
 
-Ключевой принцип проекта: это не обычный marketplace. Платформа работает с потенциально чувствительными психологическими данными, поэтому архитектура, UI, API, логирование, storage и доступы проектируются по принципам privacy-by-design и least privilege.
+Это не обычный маркетплейс. Контекст психологической помощи делает сами данные и даже факт взаимодействия чувствительными. Поэтому архитектура, UI, API, БД, логи и инфраструктура проектируются по принципам `приватность по проектированию`, `минимально необходимые привилегии` и `безопасность по умолчанию`.
 
-Технологический профиль:
+Технологический стек:
 
 - `web-app`: Next.js
 - `api-core`: NestJS + PostgreSQL + Redis
-- `realtime/ws gateway`: NestJS WebSocket gateway
-- `booking/slot worker`: Go
-- `notification worker`: Go
+- `ws-gateway`: NestJS WebSocket gateway
+- `booking-slot-worker`: Go
+- `notification-worker`: Go
 - `admin-panel`: Laravel
 - `infra`: Nginx, Docker Compose, S3-compatible storage
 
 Позиционирование как portfolio project:
 
-- production-like монорепо
-- чёткое разделение сервисов и ответственности
-- security-aware design
-- OpenAPI, CI, документация, ADR/диаграммы
-- реалистичный scope для `junior+ / strong junior backend portfolio`
+- production-like монорепозиторий
+- реалистичное разделение сервисов
+- серьёзный security/privacy слой
+- OpenAPI, CI, README, шаблоны GitHub, admin-panel
+- реалистичный масштаб для backend-портфолио уровня junior+ / strong junior
 
 ## 2. User flows
 
 ### Клиент
 
 1. Заходит в каталог психологов.
-2. Фильтрует по специализации, языку, цене, формату, ближайшим слотам.
-3. Открывает карточку психолога.
-4. Просматривает публичную информацию: фото, специализации, подход, опыт, языки, стоимость, форматы, ближайшие окна.
-5. Выбирает слот.
-6. Проходит регистрацию/логин.
-7. Подтверждает бронирование.
-8. Переходит к оплате.
-9. После успешной оплаты получает подтверждение и уведомление.
-10. До консультации получает ссылку на онлайн-сессию и напоминания.
-11. После консультации может оставить отзыв или жалобу.
+2. Фильтрует специалистов по специализации, языку, цене и формату.
+3. Открывает публичную карточку психолога.
+4. Выбирает свободный слот.
+5. Регистрируется или входит в систему.
+6. Подтверждает бронирование.
+7. Оплачивает консультацию.
+8. Получает уведомление и доступ к сессии в нужное время.
+9. После консультации может оставить отзыв или жалобу.
 
 ### Психолог
 
 1. Подаёт заявку на подключение.
-2. Заполняет анкету и загружает подтверждающие документы.
-3. Ждёт модерацию и активацию.
-4. После одобрения настраивает профиль: bio, специализации, форматы, стоимость, языки, опыт.
-5. Создаёт правила доступности и/или отдельные слоты.
-6. Получает бронирования и уведомления.
-7. Просматривает список консультаций.
-8. Переходит в онлайн-сессию по безопасной ссылке.
-9. Видит только минимально необходимую информацию о клиенте.
+2. Заполняет анкету и загружает документы.
+3. Проходит модерацию.
+4. Заполняет профиль: описание, специализации, опыт, языки, форматы, стоимость.
+5. Настраивает правила доступности и управляет слотами.
+6. Просматривает список консультаций и получает уведомления.
+7. Работает только с минимально необходимыми клиентскими данными.
 
 ### Администратор
 
-1. Заходит в backoffice.
-2. Проходит 2FA.
-3. Просматривает очередь модерации психологов.
-4. Проверяет профиль, документы, жалобы.
-5. Управляет каталогом, специализациями, пользователями, блокировками.
-6. Просматривает бронирования, оплаты, системные инциденты.
-7. Работает с аудитом и логами без доступа к лишним приватным данным.
+1. Заходит в админ-панель.
+2. Проходит усиленную аутентификацию.
+3. Модерирует психологов и их документы.
+4. Работает с жалобами, блокировками, справочниками, оплатами и аудитом.
+5. Не получает доступа к лишним приватным данным клиента и видеосессиям.
 
 ### Суперадмин
 
-1. Управляет администраторами и ролями.
-2. Имеет доступ к системным настройкам и конфигурации платформы.
-3. Используется редко и отдельно выделяется в access model.
+1. Управляет администраторами и служебными настройками.
+2. Используется редко и отделён от повседневной работы.
 
 ## 3. UI/UX и дизайн-концепция
 
-### Общая продуктовая визуальная концепция
+### Визуальный язык
 
-- Светлая, спокойная палитра: молочный, тёплый серо-бежевый, мягкий сине-серый, приглушённый зелёный/бирюзовый акцент.
-- Визуальная метафора: trust, calm, privacy, care.
-- Типографика: крупные заголовки, комфортные интервалы, высокая читаемость.
-- Интерфейс без агрессивных CTA, scarcity-механик и навязчивого upsell.
-- Мобильная адаптация обязательна: каталог и запись должны быть удобны с телефона.
+- спокойный, доверительный интерфейс
+- светлая палитра, мягкие нейтральные оттенки
+- крупная типографика и хорошие отступы
+- минимум визуального шума
+- адаптивность для mobile / tablet / desktop
 
 ### Каталог психологов
 
-- Карточки с фото, именем, специализациями, подходом, языками, ценой, форматом и ближайшими слотами.
-- Никаких лишних личных данных: адрес проживания, персональные контакты, документы, внутренние заметки недоступны.
-- Фильтры слева/сверху: специализация, язык, диапазон цены, онлайн/офлайн, опыт, наличие ближайших слотов.
-- Быстрый просмотр ближайших доступных окон прямо в карточке.
+- карточки с фото, именем, специализациями, описанием подхода, языками, ценой и ближайшими слотами
+- никаких персональных контактов, документов и внутренних заметок
+- быстрый путь к записи
 
 ### Flow записи
 
-`Каталог -> карточка психолога -> выбор слота -> подтверждение -> оплата -> success state -> доступ к сессии`
+`Каталог -> карточка психолога -> выбор слота -> подтверждение -> оплата -> доступ к сессии`
 
 Требования к UX:
 
-- ясные статусы
+- понятные статусы
 - минимум шагов
-- прогнозируемый результат после каждого действия
-- запрет скрытых условий
-- понятные правила отмены и переноса
+- прозрачные правила отмены и переноса
+- отсутствие агрессивных маркетинговых паттернов
 
 ### Кабинет клиента
 
 - ближайшие консультации
 - история консультаций
 - статусы оплат
-- список уведомлений
-- ссылки на сессии только тогда, когда это допустимо по времени и статусу
-- управление профилем, согласиями и запросами на экспорт/удаление данных
+- уведомления
+- доступ к сессии только в разрешённое время
+- управление профилем и согласиями
 
 ### Кабинет психолога
 
 - календарь и слоты
-- список предстоящих консультаций
-- входящие уведомления
-- статус модерации профиля
-- безопасное редактирование профиля
-- никаких избыточных клиентских данных на overview-экранах
+- список консультаций
+- уведомления
+- статус модерации
+- редактирование публичного профиля
 
 ### Админ-панель
 
-- рабочий интерфейс без визуального шума
-- табличные представления, фильтры, быстрые действия
-- конфиденциальные поля скрыты или частично маскированы
-- отдельные экраны для moderation, complaints, users, payments, audit
+- рабочий интерфейс без лишней графики
+- таблицы, фильтры, быстрые действия
+- скрытие или маскирование чувствительных полей
+- отдельные экраны для пользователей, модерации, жалоб, оплат и аудита
 
 ## 4. Архитектура сервисов
 
 ### Сервисная структура
 
-- `web-app` (Next.js): публичный сайт, каталог, клиентский/психологический кабинет.
-- `api-core` (NestJS): основной REST API, auth, catalog, bookings, payments orchestration, files metadata, consent, audit triggers.
-- `realtime/ws-gateway` (NestJS): WebSocket gateway для live-уведомлений, статусов, invalidation и обновлений кабинетов.
-- `booking-slot-worker` (Go): расчёт доступности, фоновые пересчёты слотов, job scheduling, slot reconciliation.
-- `notification-worker` (Go): email/telegram/push dispatch, retry, дедупликация, обработка webhook/payment events.
-- `admin-panel` (Laravel): backoffice, RBAC, moderation, complaints, content/admin CRUD.
-- `postgres`: основная реляционная БД.
-- `redis`: кэш, очереди, rate limiting, session metadata, pub/sub.
-- `s3`: документы психологов, аватары, вложения, экспорт данных.
-- `nginx`: единая точка входа.
+- `web-app`: публичный сайт, каталог, кабинеты клиента и психолога
+- `api-core`: основной REST API, auth, каталог, availability, bookings, payments, files metadata, consent, audit triggers
+- `ws-gateway`: WebSocket gateway для обновлений в реальном времени
+- `booking-slot-worker`: расчёт доступности и фоновая генерация слотов
+- `notification-worker`: email/telegram/in-app уведомления, retry, webhook handling
+- `admin-panel`: Laravel-админка
+- `postgres`: основная БД
+- `redis`: кэш, очереди, rate limiting, pub/sub
+- `s3`: документы и вложения
+- `nginx`: единая точка входа
 
-### Почему именно так
+### Почему разделение именно такое
 
-- `NestJS` подходит для основного доменного API, DTO, guards, validation, Swagger.
-- `Go` выносит CPU-/concurrency-heavy и background workload: slot generation, retries, bulk notifications, queue workers.
-- `Laravel` даёт быстрое и зрелое admin/backoffice-ядро: policies, RBAC, forms, tables, audit-friendly internal tools.
-- `Next.js` подходит и для SEO-каталога, и для authenticated кабинетов.
+- `NestJS` хорошо подходит для доменного API, DTO, validation, guards и Swagger
+- `Go` подходит для concurrency-heavy фоновых задач
+- `Laravel` ускоряет создание админ-панели и CRUD-интерфейсов
+- `Next.js` закрывает и SEO-каталог, и приватные кабинеты
 
 ### Потоки взаимодействия
 
-1. Клиент работает через `web-app`.
-2. `web-app` ходит в `api-core`.
-3. `api-core` пишет в PostgreSQL и Redis.
-4. При критичных событиях `api-core` публикует jobs/events в Redis streams/queues.
-5. `booking-slot-worker` и `notification-worker` читают очереди и выполняют фоновые задачи.
-6. `realtime/ws-gateway` получает события через Redis pub/sub и доставляет их активным пользователям.
-7. `admin-panel` работает с PostgreSQL через отдельный internal API boundary или read/write-подключение к БД только для admin domain.
-
-### Рекомендуемый способ связать admin-panel
-
-Предпочтительный вариант для pet-project:
-
-- `Laravel admin-panel` использует ту же PostgreSQL БД, но отдельные таблицы/сервисы доступа.
-- Для чувствительных операций и сложной доменной логики Laravel должен ходить в `api-core internal endpoints`, а не обходить бизнес-правила.
-
-Правило:
-
-- чтение справочников и агрегатов допустимо напрямую из БД
-- actions, меняющие доменный state, лучше проводить через внутренний API или shared domain rules
+1. Пользователь работает через `web-app`.
+2. `web-app` вызывает `api-core`.
+3. `api-core` читает и пишет в PostgreSQL и Redis.
+4. При важных событиях `api-core` публикует доменные события в Redis.
+5. `ws-gateway` получает события и отправляет их активным пользователям.
+6. Go-воркеры выполняют фоновые задачи через очереди.
+7. `admin-panel` работает с общей БД по ограниченному operational boundary, а сложные доменные действия должны идти через внутренний API.
 
 ## 5. Структура репозитория
 
 ```text
 .
 ├─ apps/
-│  ├─ web-app/                 # Next.js
-│  ├─ api-core/                # NestJS
-│  ├─ ws-gateway/              # NestJS realtime
-│  └─ admin-panel/             # Laravel
+│  ├─ web-app/
+│  ├─ api-core/
+│  ├─ ws-gateway/
+│  └─ admin-panel/
 ├─ services/
-│  ├─ booking-slot-worker/     # Go
-│  └─ notification-worker/     # Go
+│  ├─ booking-slot-worker/
+│  └─ notification-worker/
 ├─ infra/
-│  ├─ nginx/
-│  ├─ postgres/
-│  ├─ redis/
-│  └─ s3/
+│  └─ nginx/
 ├─ docker/
 │  ├─ dev/
 │  └─ prod/
@@ -193,9 +168,6 @@
 │  ├─ adr/
 │  └─ security/
 ├─ .github/
-│  ├─ workflows/
-│  ├─ ISSUE_TEMPLATE/
-│  └─ PULL_REQUEST_TEMPLATE.md
 ├─ docker-compose.yml
 ├─ .env.example
 ├─ README.md
@@ -206,7 +178,7 @@
 
 ## 6. Docker-инфраструктура
 
-### Что поднимается в `docker-compose.yml`
+### Что поднимается
 
 - `nginx`
 - `web-app`
@@ -217,625 +189,296 @@
 - `notification-worker`
 - `postgres`
 - `redis`
-- `minio` или другой S3-compatible сервис
+- `minio`
 
 ### Сети
 
-- `edge`: только `nginx` и внешние сервисы, которым нужен ingress
+- `edge`: ingress
 - `app`: внутреннее взаимодействие приложений
-- `data`: postgres/redis/minio, недоступные снаружи
+- `data`: Postgres, Redis и MinIO, недоступные снаружи
 
-### Наружу публикуются только
-
-- `80/443` для `nginx`
-- опционально `9001` для MinIO console только в dev
-
-Не публиковать наружу:
-
-- `postgres`
-- `redis`
-- internal service ports
-
-### Volumes
+### Volume-ы
 
 - `postgres_data`
-- `redis_data` при необходимости persistence
+- `redis_data`
 - `minio_data`
-- `node_modules`/`vendor` как bind/cached volumes в dev по желанию
 
-### Dev-подход
+### Правила сети и портов
 
-- bind mounts
-- hot reload для Next/Nest
-- Laravel artisan serve или php-fpm + nginx
-- test SMTP/Mailpit для отладки
+- наружу публикуется только `nginx`
+- `postgres` и `redis` не публикуются наружу
+- MinIO console допустим только для dev
 
-### Prod-подход
-
-- multi-stage Dockerfiles
-- immutable images
-- secrets через env/secrets manager
-- nginx с TLS termination
-- отдельные compose/helm overrides
-
-### Миграции и seed
-
-- `api-core`: migration command в entrypoint job
-- `admin-panel`: artisan migrate для внутренних таблиц, если они есть
-- отдельная команда `make seed-dev`
-- не запускать destructive seed в prod
-
-### Локальный старт
-
-Одна команда:
+### Локальный запуск
 
 ```bash
 docker compose up --build
 ```
 
-Дополнительно:
+### Миграции и seed
 
 ```bash
-docker compose run --rm api-core npm run migration:run
-docker compose run --rm api-core npm run seed:dev
-docker compose run --rm admin-panel php artisan migrate
+docker compose run --rm api-core npx prisma migrate deploy
+docker compose run --rm api-core npx prisma db seed
+docker compose run --rm admin-panel php artisan route:list
 ```
 
 ## 7. Структура БД
 
-### Общие принципы
+### Общие правила
 
 - UUID как primary key
-- soft delete только там, где это оправдано
-- `created_at/updated_at` везде
-- чувствительные поля помечаются как restricted domain data
-- аудитируем все admin/security-critical операции
+- `created_at/updated_at` почти везде
+- чувствительные поля отмечаются как restricted data
+- security/admin действия аудитируются
 
 ### Таблицы
 
-#### `users`
-- Назначение: базовая учётная запись.
-- Поля: `id`, `email`, `password_hash`, `status`, `last_login_at`, `email_verified_at`, `phone_hash?`, `is_2fa_enabled`.
-- Связи: `user_roles`, `client_profiles`, `psychologist_profiles`, `refresh_tokens`, `consent_records`.
-- Чувствительные: `password_hash`, email, phone hash, security flags.
-- Индексы: `email unique`, `status`, `last_login_at`.
-
-#### `roles`
-- Назначение: справочник ролей.
-- Поля: `id`, `code`, `name`.
-- Связи: `user_roles`.
-- Чувствительные: нет.
-- Индексы: `code unique`.
-
-#### `user_roles`
-- Назначение: many-to-many user-role.
-- Поля: `user_id`, `role_id`.
-- Связи: `users`, `roles`.
-- Чувствительные: косвенно security-critical.
-- Индексы: composite unique.
-
-#### `client_profiles`
-- Назначение: данные клиента.
-- Поля: `user_id`, `display_name`, `timezone`, `birth_year?`, `preferences_json`.
-- Связи: `users`, `consultations`, `reviews`, `complaints`.
-- Чувствительные: предпочтения, timezone, любые note-like поля.
-- Индексы: `user_id unique`.
-
-#### `psychologist_profiles`
-- Назначение: профиль специалиста.
-- Поля: `user_id`, `public_slug`, `first_name`, `last_name`, `public_title`, `bio`, `experience_years`, `price_from`, `price_to`, `languages_json`, `formats_json`, `approval_status`, `rating_avg`, `reviews_count`.
-- Связи: `users`, `psychologist_specializations`, `availability_rules`, `appointment_slots`, `consultations`, `files`.
-- Чувствительные: приватные внутренние заметки модерации, документы квалификации.
-- Индексы: `public_slug unique`, `approval_status`, `price_from`, `rating_avg`.
-
-#### `specializations`
-- Назначение: справочник специализаций.
-- Поля: `id`, `slug`, `name`, `is_active`.
-- Связи: `psychologist_specializations`.
-- Чувствительные: нет.
-- Индексы: `slug unique`, `is_active`.
-
-#### `psychologist_specializations`
-- Назначение: связи психологов и специализаций.
-- Поля: `psychologist_profile_id`, `specialization_id`.
-- Связи: `psychologist_profiles`, `specializations`.
-- Чувствительные: нет.
-- Индексы: composite unique, `specialization_id`.
-
-#### `availability_rules`
-- Назначение: регулярные правила доступности.
-- Поля: `id`, `psychologist_profile_id`, `weekday`, `start_time`, `end_time`, `slot_duration_min`, `buffer_min`, `timezone`, `is_active`.
-- Связи: `psychologist_profiles`.
-- Чувствительные: рабочий график, ограниченно чувствительно.
-- Индексы: `psychologist_profile_id`, `weekday`, `is_active`.
-
-#### `appointment_slots`
-- Назначение: конкретные слоты.
-- Поля: `id`, `psychologist_profile_id`, `starts_at`, `ends_at`, `status`, `source`, `consultation_id?`, `locked_until?`.
-- Связи: `psychologist_profiles`, `consultations`.
-- Чувствительные: косвенно чувствительные.
-- Индексы: `(psychologist_profile_id, starts_at)`, `status`, `locked_until`.
-
-#### `consultations`
-- Назначение: бронирования/сессии.
-- Поля: `id`, `client_user_id`, `psychologist_user_id`, `slot_id`, `status`, `meeting_provider`, `meeting_room_id`, `meeting_join_token_ref`, `scheduled_at`, `cancelled_at`, `cancellation_reason_code`, `rescheduled_from_id?`.
-- Связи: `users`, `appointment_slots`, `payments`, `reviews`, `complaints`, `consultation_status_history`.
-- Чувствительные: meeting access data, cancellation reasons, internal notes.
-- Индексы: `(client_user_id, scheduled_at)`, `(psychologist_user_id, scheduled_at)`, `status`.
-
-#### `consultation_status_history`
-- Назначение: история изменений статусов.
-- Поля: `id`, `consultation_id`, `from_status`, `to_status`, `changed_by_user_id`, `reason_code`, `created_at`.
-- Связи: `consultations`, `users`.
-- Чувствительные: reason fields могут быть чувствительными.
-- Индексы: `consultation_id`, `created_at`.
-
-#### `payments`
-- Назначение: платёжная сущность.
-- Поля: `id`, `consultation_id`, `provider`, `provider_payment_id`, `amount`, `currency`, `status`, `idempotency_key`, `paid_at`, `refunded_at`.
-- Связи: `consultations`, `payment_events`.
-- Чувствительные: provider references, но не PAN/CVV.
-- Индексы: `provider_payment_id unique`, `consultation_id`, `status`, `idempotency_key unique`.
-
-#### `payment_events`
-- Назначение: события от платёжного провайдера.
-- Поля: `id`, `payment_id`, `provider_event_id`, `event_type`, `payload_json`, `signature_valid`, `processed_at`.
-- Связи: `payments`.
-- Чувствительные: payload provider-а может содержать PII.
-- Индексы: `provider_event_id unique`, `payment_id`, `processed_at`.
-
-#### `notifications`
-- Назначение: очередь/история уведомлений.
-- Поля: `id`, `user_id`, `channel`, `type`, `template_code`, `payload_json`, `status`, `sent_at`, `read_at`, `dedupe_key`.
-- Связи: `users`.
-- Чувствительные: payload может содержать минимальные user-specific данные.
-- Индексы: `(user_id, read_at)`, `status`, `dedupe_key unique`.
-
-#### `reviews`
-- Назначение: отзывы после завершённых консультаций.
-- Поля: `id`, `consultation_id`, `client_user_id`, `psychologist_user_id`, `rating`, `text`, `status`.
-- Связи: `consultations`, `users`.
-- Чувствительные: текст может содержать personal mental-health info.
-- Индексы: `consultation_id unique`, `psychologist_user_id`, `status`.
-
-#### `complaints`
-- Назначение: жалобы.
-- Поля: `id`, `author_user_id`, `target_user_id?`, `consultation_id?`, `type`, `text`, `status`, `assigned_admin_id?`, `resolution_note`.
-- Связи: `users`, `consultations`.
-- Чувствительные: complaint text.
-- Индексы: `status`, `assigned_admin_id`, `consultation_id`.
-
-#### `files`
-- Назначение: метаданные файлов в S3.
-- Поля: `id`, `owner_user_id`, `bucket`, `object_key`, `purpose`, `mime_type`, `size_bytes`, `visibility`, `checksum`, `uploaded_at`.
-- Связи: `users`, возможно `psychologist_profiles`.
-- Чувствительные: документы квалификации, экспорт данных.
-- Индексы: `owner_user_id`, `purpose`, `object_key unique`.
-
-#### `audit_logs`
-- Назначение: аудит важных действий.
-- Поля: `id`, `actor_user_id`, `actor_role`, `action`, `entity_type`, `entity_id`, `ip_hash`, `user_agent_hash`, `request_id`, `metadata_json`, `created_at`.
-- Связи: `users`.
-- Чувствительные: metadata ограничивать и маскировать.
-- Индексы: `(entity_type, entity_id)`, `actor_user_id`, `created_at`, `action`.
-
-#### `sessions` / `refresh_tokens`
-- Назначение: session management и rotation refresh tokens.
-- Поля: `id`, `user_id`, `device_info_hash`, `refresh_token_hash`, `expires_at`, `rotated_from_id`, `revoked_at`, `ip_hash`.
-- Связи: `users`.
-- Чувствительные: refresh token hash, device fingerprints.
-- Индексы: `user_id`, `expires_at`, `revoked_at`.
-
-#### `consent_records`
-- Назначение: фиксация согласий.
-- Поля: `id`, `user_id`, `consent_type`, `version`, `granted`, `granted_at`, `revoked_at`, `source`.
-- Связи: `users`.
-- Чувствительные: legal/security-critical.
-- Индексы: `(user_id, consent_type, version)`, `granted_at`.
+- `users`: базовая учётная запись; чувствительные поля `email`, `password_hash`, security flags; индексы `email unique`, `status`
+- `roles`: роли; индекс `code unique`
+- `user_roles`: связь many-to-many пользователь-роль; composite unique
+- `client_profiles`: клиентский профиль; чувствительные поля `preferences_json`; индекс `user_id unique`
+- `psychologist_profiles`: публичный профиль психолога и moderation state; чувствительные поля `moderation_note`; индексы `public_slug unique`, `approval_status`, `price_from`, `price_to`
+- `specializations`: справочник специализаций; индексы `slug unique`, `is_active`
+- `psychologist_specializations`: связка психологов и специализаций; composite unique
+- `availability_rules`: недельные правила доступности; индексы `psychologist_profile_id`, `weekday`, `is_active`
+- `appointment_slots`: конкретные окна записи; индексы `(psychologist_profile_id, starts_at)`, `status`, `locked_until`
+- `consultations`: запись на консультацию; чувствительные поля `client_message`, meeting access data; индексы `(client_user_id, scheduled_at)`, `(psychologist_user_id, scheduled_at)`, `status`
+- `consultation_status_history`: история статусов; индексы `consultation_id`, `created_at`
+- `payments`: платежи; чувствительные `provider_payment_id`, `metadata_json`; индексы `consultation_id`, `status`, `provider_payment_id`
+- `payment_events`: события провайдера; чувствительные `payload_json`; индекс `provider_event_id unique`
+- `notifications`: уведомления; чувствительные payload fields; индексы `user_id`, `status`, `created_at`
+- `reviews`: отзывы; чувствительный текст; индексы `psychologist_user_id`, `status`
+- `complaints`: жалобы; чувствительные `text`, `resolution_note`; индексы `status`, `type`, `assigned_admin_id`
+- `files`: метаданные файлов; чувствительные документы психологов; индексы `owner_user_id`, `purpose`
+- `audit_logs`: аудит критичных действий; индексы `actor_user_id`, `action`, `entity_type`, `created_at`
+- `refresh_tokens` / `sessions`: управление сессиями; чувствительные `token_hash`, hashes; индексы `user_id`, `expires_at`, `revoked_at`
+- `consent_records`: история согласий; индекс `(user_id, consent_type, version)`
 
 ## 8. Backend API modules
 
-### Общие правила API
+### Общие правила
 
-- REST для CRUD и query-потоков
-- WebSocket для live-уведомлений и realtime state updates
-- DTO + validation pipes
-- единый error envelope
-- пагинация: `page`, `limit`, `cursor` там, где нужно
-- sorting/filtering whitelists
-- idempotency для критичных mutation endpoints
+- основной стиль: REST
+- realtime-обновления: WebSocket
+- пагинация, фильтры и сортировка у списков
+- `Idempotency-Key` для критичных операций
+- единый response pattern: `data/meta` или `error/meta`
 
-### Response pattern
+### Модули
 
-Успех:
-
-```json
-{
-  "data": {},
-  "meta": {
-    "requestId": "uuid"
-  }
-}
-```
-
-Ошибка:
-
-```json
-{
-  "error": {
-    "code": "VALIDATION_ERROR",
-    "message": "Invalid request payload",
-    "details": []
-  },
-  "meta": {
-    "requestId": "uuid"
-  }
-}
-```
-
-### Модули и endpoints
-
-#### `auth`
-- `POST /auth/register`
-- `POST /auth/login`
-- `POST /auth/refresh`
-- `POST /auth/logout`
-- `POST /auth/logout-all`
-- `POST /auth/forgot-password`
-- `POST /auth/reset-password`
-- `POST /auth/2fa/setup`
-- `POST /auth/2fa/verify`
-- DTO: email/password, refresh token, reset token.
-- Access: public/authenticated.
-
-#### `users`
-- `GET /users/me`
-- `PATCH /users/me`
-- `GET /users/me/sessions`
-- `DELETE /users/me/sessions/:id`
-- `GET /users/me/consents`
-- `POST /users/me/export`
-- `DELETE /users/me`
-- Access: ownership only.
-
-#### `psychologists`
-- `POST /psychologists/apply`
-- `GET /psychologists/me`
-- `PATCH /psychologists/me`
-- `POST /psychologists/me/files`
-- `GET /psychologists/me/consultations`
-- `PATCH /psychologists/me/consultations/:id/status`
-- `POST /psychologists/me/availability-rules`
-- `POST /psychologists/me/slots`
-- Access: psychologist only, admin for moderation views.
-
-#### `catalog`
-- `GET /catalog/psychologists`
-- `GET /catalog/psychologists/:slug`
-- `GET /catalog/specializations`
-- REST because это query-heavy публичный каталог.
-- Параметры: filters, sorting, pagination.
-
-#### `availability`
-- `GET /availability/psychologists/:id/slots`
-- `POST /availability/slots/hold`
-- `DELETE /availability/slots/hold/:holdId`
-- `POST /availability/rules/rebuild`
-- Access: public for reading available slots, authenticated for hold/book flows.
-- Idempotency: slot hold / booking initiation.
-
-#### `bookings`
-- `POST /bookings`
-- `GET /bookings/me`
-- `GET /bookings/:id`
-- `POST /bookings/:id/cancel`
-- `POST /bookings/:id/reschedule`
-- `GET /bookings/:id/join`
-- Access: client/psychologist ownership checks, admin restricted visibility.
-
-#### `payments`
-- `POST /payments/checkout`
-- `GET /payments/:id`
-- `POST /payments/webhook`
-- `POST /payments/:id/refund` admin/internal only
-- Webhook только signed.
-- Idempotency key обязателен для checkout/refund.
-
-#### `notifications`
-- `GET /notifications`
-- `POST /notifications/:id/read`
-- `POST /notifications/read-all`
-- `WS /ws` events: `notification.created`, `booking.updated`, `payment.updated`.
-
-#### `reviews`
-- `POST /reviews`
-- `GET /psychologists/:id/reviews`
-- `PATCH /reviews/:id` ограниченно
-- review only after completed consultation.
-
-#### `complaints`
-- `POST /complaints`
-- `GET /complaints/me`
-- `GET /admin/complaints`
-- `PATCH /admin/complaints/:id/status`
-
-#### `admin`
-- `GET /admin/users`
-- `PATCH /admin/users/:id/block`
-- `GET /admin/psychologists/moderation`
-- `PATCH /admin/psychologists/:id/approve`
-- `PATCH /admin/psychologists/:id/reject`
-- `GET /admin/payments`
-- `GET /admin/settings`
-
-#### `files`
-- `POST /files/upload-url`
-- `GET /files/:id/download-url`
-- `DELETE /files/:id`
-- Файл всегда идёт в S3, API хранит только метаданные и выдаёт signed URLs.
-
-#### `video sessions`
-- `POST /video-sessions/:consultationId/access`
-- `GET /video-sessions/:consultationId`
-- Только для авторизованных участников консультации.
-- Выдаётся временный access token.
-
-#### `audit`
-- `GET /admin/audit-logs`
-- `GET /admin/audit-logs/:id`
-- Доступ: только admin/superadmin с ограничениями на поля.
+- `auth`: `register`, `login`, `refresh`, `logout`, `logout-all`
+- `users`: `me`, update profile, sessions management
+- `psychologists`: self profile, specializations
+- `catalog`: список психологов, карточка психолога, специализации
+- `availability`: rules, slots, public slot view
+- `bookings`: create, list, detail, cancel, complete
+- `payments`: create, list, detail, тестовые confirm/fail/cancel
+- `notifications`: in-app список и read actions
+- `reviews`: create and list
+- `complaints`: create and admin handling
+- `admin`: users, moderation, payments, settings
+- `files`: upload/download URLs и удаление
+- `video sessions`: session detail и access token
+- `audit`: список и детали аудита
 
 ### DTO / Validation
 
-- `class-validator` / `zod` schemas на gateway boundary
+- `class-validator` на boundary
 - enum validation
-- length and range limits
+- length/range limits
 - allowlist сортировок и фильтров
-- sanitization rich text / bio / review / complaint text
-- file DTO: mime, purpose, size
+- sanitization для `bio`, `review`, `complaint`, `client_message`
+- file DTO: `mime`, `purpose`, `size`
 
 ## 9. Безопасность и конфиденциальность
 
-### Основная позиция
+### Базовая позиция
 
-Платформа связана с психологическими консультациями. Следовательно:
+Платформа работает с психологическими консультациями. Это означает:
 
-- данные клиента нельзя считать обычными пользовательскими заметками
-- контекст консультаций может быть sensitive by default
-- admin не должен иметь полный “god-mode” доступ к приватным данным
-- данные разделяются по публичности на уровне БД, API, DTO, UI и логов
+- данные клиента нельзя трактовать как обычные данные маркетплейса
+- контекст консультации считается sensitive by default
+- администратор не должен получать god-mode доступ к приватным данным
+- приватные поля должны быть явно выделены на уровне БД, API, DTO, UI и логов
 
 ### Privacy-by-design принципы
 
 - минимизация данных
-- необходимость доступа по роли и контексту операции
-- segregation of public/private fields
-- secure defaults
-- explicit consent management
-- retention policy
+- разделение публичных и приватных полей
+- доступ по роли и контексту операции
+- безопасные значения по умолчанию
+- явное управление consent и retention
 
-### Разделение данных
+### Аутентификация и сессии
 
-Публично доступны:
+- короткоживущий access token
+- refresh token в `HttpOnly + Secure + SameSite` cookie
+- refresh token rotation
+- server-side revocation
+- завершение отдельных сессий и logout-all
+- access token не хранится в `localStorage`
 
-- имя/псевдоним психолога
-- фото профиля
-- специализации
-- описание подхода
-- опыт
-- языки
-- стоимость
-- доступные слоты
+### RBAC и ownership checks
 
-Приватны:
+- роли: `client`, `psychologist`, `admin`, `superadmin`
+- checks на каждый endpoint
+- клиент видит только свои записи
+- психолог видит только консультации, где он участник
+- admin получает только operational payload
+- superadmin используется только для meta-admin операций
 
-- клиентские заметки
-- complaint/review raw text для узкого набора ролей
-- документы квалификации
-- meeting tokens
-- internal moderation notes
-- export/delete requests
-- session/security metadata
+### CSRF, CORS, cookies
 
-### Аутентификация
+- CSRF для cookie-based auth flows
+- CORS только по allowlist
+- cookies с `Secure`, `HttpOnly`, `SameSite`
 
-- access token short-lived: 10-15 минут
-- refresh token long-lived: 7-30 дней
-- refresh token rotation при каждом refresh
-- хранение refresh token только в `HttpOnly + Secure + SameSite` cookie
-- access token в памяти клиента, не в localStorage
-- server-side revocation list/session store
+### Rate limiting и brute force защита
 
-### Session management
-
-- каждая сессия хранится отдельно
-- устройство можно завершить отдельно
-- logout-all инвалидирует все refresh sessions
-- device metadata и IP хэшируются/минимизируются
-
-### RBAC + ownership checks
-
-- роли: client, psychologist, admin, superadmin
-- policies/guards на каждый endpoint
-- admin не получает полный payload по умолчанию
-- superadmin используется только для meta-admin operations
-- обязательны ownership checks: клиент видит только свои записи, психолог — только консультации, где он участник
-
-### 2FA
-
-- обязательно для admin и superadmin
-- желательно для psychologist
-- TOTP + recovery codes
-
-### CSRF / CORS / cookies
-
-- если refresh/logout идут через cookies, обязательна CSRF защита
-- CORS только по allowlist доменов
-- cookies: `Secure`, `HttpOnly`, `SameSite=Lax/Strict` по контексту
-
-### Brute force / rate limiting
-
-- login rate limit по IP + email pair
+- login rate limit по IP + email
 - password reset rate limit
 - signup rate limit
 - upload rate limit
-- webhook rate limit / signature validation
-- Redis-backed throttling
+- webhook rate limit и signature validation
 
 ### Валидация и sanitization
 
-- DTO validation на входе
-- allowlist fields only
-- sanitization текстовых полей
-- нормализация email
+- DTO validation
+- allowlist полей
+- sanitization пользовательского текста
 - защита от mass assignment
 
 ### Файлы
 
-- только через pre-signed upload URL или backend proxy
-- проверка `mime type`, extension, size, checksum
-- документы психологов только в private bucket
-- скачивание только через short-lived signed URL
-- antivirus scan или асинхронный file screening для production-like roadmap
+- загрузка через pre-signed URL или backend proxy
+- проверка `mime type`, extension, size и checksum
+- private buckets для чувствительных файлов
+- short-lived signed URLs на скачивание
 
-### Шифрование
+### Шифрование и секреты
 
-- in transit: HTTPS/TLS
-- at rest: шифрование volume/storage где возможно
-- чувствительные secrets только через env/secrets manager
-- пароли только через `argon2id` или `bcrypt` с достаточным cost
+- HTTPS/TLS in transit
+- шифрование storage/volume at rest, где возможно
+- секреты только через env или secrets manager
+- никаких секретов в Git
 
 ### Логи и аудит
 
-- request logs без тел чувствительных запросов
-- не логировать пароли, refresh/access tokens, payment payload full raw, review/complaint full text там, где не нужно
-- audit log для admin actions, moderation, blocks, refunds, consent changes, data export/delete
-- masking/partial hashing для IP и user agent
+- не логировать пароли, токены, payment payload, client message, raw complaint text без крайней необходимости
+- хэшировать или маскировать IP и user-agent
+- аудитировать admin actions, moderation, blocks, refunds, consent changes, export/delete
 
-### Payments / webhooks
+### Payments и webhooks
 
 - webhook signature verification
 - replay protection
-- дедупликация через `provider_event_id`
+- дедупликация по `provider_event_id`
 - idempotent processing
-- no storage of raw card data
+- отсутствие хранения card data
 
 ### Video sessions
 
-- не включать запись по умолчанию
-- join access только участникам консультации
-- временный session access token
-- lifecycle token short TTL
-- нельзя показывать meeting URL заранее без политики допуска
-
-### Admin access minimization
-
-- админка показывает только data-to-operate
-- скрывать/маскировать email, complaint text preview, payment refs, личные заметки
-- чувствительные экраны доступны только определённым permission scopes
-- отдельно роль `superadmin`, не использовать для повседневной работы
+- запись не включается по умолчанию
+- доступ только авторизованным участникам
+- временный access token
+- time window для join access
+- админы не получают ссылки на сессии и токены доступа
 
 ### Data export / deletion / retention
 
-- пользователь может запросить экспорт данных
-- пользователь может инициировать удаление аккаунта
-- retention policy для audit/security/payment/legal data
-- приватные заметки и complaint payload удаляются или анонимизируются по policy
-- consent history хранится отдельно и версионируется
+- экспорт пользовательских данных
+- удаление аккаунта по запросу
+- отдельная retention policy для audit/security/payment/legal data
+- анонимизация или удаление приватных note-like payload по policy
 
-### Docker / network hardening
+### Hardening Docker и сети
 
 - Postgres и Redis только во внутренней сети
-- Nginx единственная публичная точка входа
+- Nginx — единственная публичная точка входа
 - internal services недоступны напрямую из интернета
-- отдельные env files для сервисов
-- `.env` никогда не коммитится в Git
+- `.env` никогда не коммитится
 
 ## 10. Top security risks and mitigation
 
-### 1. Утечка чувствительных психологических данных
-- Риск: review/complaint/internal notes попадают в логи, админку или публичный API.
-- Защита: field-level DTO separation, masked logs, strict admin scopes, privacy review для response schemas.
+### 1. Утечка чувствительных данных консультации
+- риск: complaint/review/internal notes попадают в логи, админку или публичный API
+- защита: field-level DTO separation, masked logs, strict admin scopes, privacy review схем ответов
 
 ### 2. Избыточный доступ администратора
-- Риск: админ видит больше, чем нужно.
-- Защита: granular permissions, redacted admin UI, privileged actions only through audited flows, superadmin split.
+- риск: админ видит больше, чем нужно для операции
+- защита: granular permissions, redacted UI, audit каждого привилегированного действия, отдельная роль `superadmin`
 
 ### 3. Захват сессии
-- Риск: кража refresh token или reuse старого refresh token.
-- Защита: rotation, revocation, device-bound sessions, secure cookies, anomaly detection.
+- риск: reuse украденного refresh token
+- защита: rotation, revocation, secure cookies, session store, anomaly detection
 
 ### 4. Double booking / race condition
-- Риск: два клиента бронируют один слот.
-- Защита: transactional booking, slot hold lock, unique constraints, idempotency keys, worker reconciliation.
+- риск: два клиента бронируют один слот
+- защита: транзакции, slot hold, unique constraints, idempotency, reconciliation worker
 
-### 5. Поддельные payment webhooks
-- Риск: фиктивное подтверждение оплаты.
-- Защита: signature validation, IP allowlist where possible, provider event dedupe, raw payload verification.
+### 5. Поддельный payment webhook
+- риск: фиктивное подтверждение оплаты
+- защита: signature validation, replay protection, provider event dedupe, raw payload verification
 
 ### 6. Утечка приватных файлов
-- Риск: прямой доступ к документам психологов.
-- Защита: private bucket, signed URLs with short TTL, scoped object keys, no public ACL.
+- риск: прямой доступ к документам психолога
+- защита: private bucket, short-lived signed URLs, отсутствие public ACL
 
 ### 7. Brute force и credential stuffing
-- Риск: подбор паролей.
-- Защита: rate limiting, captcha after threshold, device/IP throttling, optional 2FA.
+- риск: подбор паролей
+- защита: rate limiting, captcha после порога, optional 2FA
 
-### 8. SSRF / insecure file processing
-- Риск: злоумышленник подсовывает опасные URL/файлы.
-- Защита: no arbitrary fetch of user URLs, controlled upload pipeline, mime/size validation.
+### 8. SSRF и небезопасная обработка файлов
+- риск: произвольные URL или опасные файлы
+- защита: контролируемая upload pipeline, mime/size validation, отказ от arbitrary fetch
 
-### 9. Неправильная публикация Redis/Postgres
-- Риск: прямой сетевой доступ к внутренним сервисам.
-- Защита: internal-only Docker networks, no host port mapping, auth enabled.
+### 9. Ошибочная публикация Redis/Postgres наружу
+- риск: прямой сетевой доступ к внутренним сервисам
+- защита: internal-only networks, отсутствие host port mapping
 
 ### 10. Утечка meeting links
-- Риск: посторонний входит в видеосессию.
-- Защита: time-bound access token, participant authorization, rotating join credentials.
+- риск: посторонний доступ к видеосессии
+- защита: time-bound join token, participant authorization, rotating access
 
 ## 11. План реализации по этапам
 
 ### Этап 0. Foundation
-- monorepo structure
+- монорепозиторий
 - Docker Compose
 - PostgreSQL, Redis, MinIO, Nginx
 - CI skeleton
-- env strategy
 
-### Этап 1. Auth + profiles
+### Этап 1. Auth и профили
 - NestJS auth
-- roles/RBAC
+- RBAC
 - refresh token rotation
-- user profile
-- psychologist application/profile
+- профили клиента и психолога
 
-### Этап 2. Catalog + search
-- public psychologists catalog
-- filters/sorting/pagination
-- psychologist public page
-- specializations dictionary
+### Этап 2. Каталог
+- публичный каталог психологов
+- фильтры, сортировка, пагинация
+- публичная карточка психолога
 
-### Этап 3. Availability + booking
-- availability rules
-- slot generation worker on Go
-- slot hold
+### Этап 3. Доступность и бронирование
+- правила доступности
+- генерация слотов
 - booking transaction
-- cancellation/reschedule rules
+- отмена и перенос
 
-### Этап 4. Payments + notifications
+### Этап 4. Оплаты и уведомления
 - payment integration
-- payment webhooks
+- webhook handling
 - notification worker
-- email/telegram/in-app notifications
 - WebSocket updates
 
-### Этап 5. Admin/backoffice
-- Laravel auth + RBAC
+### Этап 5. Backoffice
+- Laravel auth
 - moderation queue
-- users/complaints/payments views
+- users / complaints / payments views
 - audit screens
 
-### Этап 6. Video + privacy operations
+### Этап 6. Видео и privacy operations
 - session access token
 - join flow
 - consent management
@@ -844,43 +487,39 @@ docker compose run --rm admin-panel php artisan migrate
 ### Этап 7. Hardening
 - 2FA
 - security headers
-- penetration checklist
-- log redaction review
+- review логирования
 - backup/restore
 
 ## 12. Что включить в MVP
 
-- регистрация/логин/refresh/logout
-- роли client/psychologist/admin
-- профиль клиента
-- профиль психолога + заявка на модерацию
+- регистрация, логин, refresh, logout
+- роли `client`, `psychologist`, `admin`
+- профили клиента и психолога
 - каталог психологов
 - фильтры и карточка психолога
-- availability rules + generated slots
+- правила доступности и сгенерированные слоты
 - бронирование консультации
 - отмена по простым правилам
-- payment stub или one real provider
-- уведомления email + in-app
+- тестовая оплата или один реальный провайдер
+- email + in-app уведомления
 - basic WebSocket notifications
 - Laravel admin moderation
 - complaints
 - audit logs
-- secure file upload for psychologist documents
+- безопасная загрузка документов психолога
 - Docker Compose local environment
 - OpenAPI / Swagger
 
 ## 13. Что можно оставить на V2
 
-- сложные пакеты тарифов и subscriptions
-- ML/recommendation matching
+- тарифные пакеты и subscriptions
+- recommendation matching
 - многоязычность интерфейса
 - advanced analytics
 - mobile push notifications
-- insurance / invoice modules
-- advanced availability optimization
 - in-platform chat
-- calendar sync with Google/Outlook
-- full data lifecycle automation and legal workflows
+- calendar sync
+- расширенная legal automation
 
 ## 14. Как оформить проект на GitHub для сильного портфолио
 
@@ -891,41 +530,35 @@ docker compose run --rm admin-panel php artisan migrate
 - CI: lint/test/build
 - issue templates, PR template, CONTRIBUTING
 - `.env.example` для каждого сервиса
-- seed demo data
-- demo accounts
-- screenshots/short GIFs кабинетов и админки
+- seed-данные для демо и демонстрационные аккаунты
+- скриншоты или GIF пользовательских flow
 
-Показывать в репозитории:
-
-- зрелую структуру
-- осмысленные commit messages
-- ADR по ключевым решениям
-- security-first thinking
+Важно показать не только код, но и зрелое инженерное мышление: архитектуру, security-first подход, понятную структуру и аккуратную документацию.
 
 ## 15. Рекомендуемые README-разделы
 
-- Project overview
-- Why this architecture
-- Tech stack
-- Services map
-- Local development
-- Environment variables
-- Database migrations and seed
-- API docs
-- Security model
-- Demo users
-- Testing and CI
+- Обзор проекта
+- Почему выбрана такая архитектура
+- Стек технологий
+- Карта сервисов
+- Локальная разработка
+- Переменные окружения
+- Миграции и seed
+- Документация API
+- Модель безопасности
+- Демо-пользователи
+- Тестирование и CI
 - Roadmap
 
 ## 16. Список deliverables
 
 - `docs/system-blueprint.md`
-- architecture diagrams
-- repo skeleton and standards files
-- docker-compose blueprint
-- nginx config blueprint
-- CI workflow skeleton
-- README / CONTRIBUTING / SECURITY
-- DB schema design and migration plan
-- API module map and endpoint list
-- MVP roadmap with security priorities
+- архитектурные диаграммы
+- repo scaffold и стандарты
+- `docker-compose.yml`
+- `nginx` config
+- GitHub Actions
+- `README.md`, `CONTRIBUTING.md`, `SECURITY.md`
+- дизайн БД и migration plan
+- карта API-модулей и endpoint list
+- roadmap MVP/V2

@@ -75,23 +75,23 @@ export function FilterBar({
     <div className="surface surface-muted">
       <div className="form-grid filters-grid">
         <label className="field">
-          <span className="field-label">search</span>
+          <span className="field-label">поиск</span>
           <input
             className="field-input"
             onChange={(event) => setQ(event.target.value)}
-            placeholder="anxiety, burnout, cbt"
+            placeholder="тревожность, выгорание, кпт"
             value={q}
           />
         </label>
 
         <label className="field">
-          <span className="field-label">specialization</span>
+          <span className="field-label">специализация</span>
           <select
             className="field-select"
             onChange={(event) => setSpecialization(event.target.value)}
             value={specialization}
           >
-            <option value="">all areas</option>
+            <option value="">все направления</option>
             {specializations.map((item) => (
               <option key={item.id} value={item.slug}>
                 {item.name}
@@ -101,33 +101,33 @@ export function FilterBar({
         </label>
 
         <label className="field">
-          <span className="field-label">language</span>
+          <span className="field-label">язык</span>
           <input
             className="field-input"
             onChange={(event) => setLanguage(event.target.value)}
-            placeholder="ru or en"
+            placeholder="ru или en"
             value={language}
           />
         </label>
 
         <label className="field">
-          <span className="field-label">sorting</span>
+          <span className="field-label">сортировка</span>
           <select className="field-select" onChange={(event) => setSort(event.target.value)} value={sort}>
-            <option value="rating_desc">best rated</option>
-            <option value="price_asc">lower price</option>
-            <option value="price_desc">higher price</option>
-            <option value="experience_desc">more experience</option>
-            <option value="latest">latest added</option>
+            <option value="rating_desc">сначала с лучшим рейтингом</option>
+            <option value="price_asc">сначала дешевле</option>
+            <option value="price_desc">сначала дороже</option>
+            <option value="experience_desc">сначала с большим опытом</option>
+            <option value="latest">сначала новые</option>
           </select>
         </label>
       </div>
 
       <div className="inline-actions">
         <button className="button button-primary" onClick={applyFilters} type="button">
-          apply filters
+          применить
         </button>
         <button className="button button-ghost" onClick={resetFilters} type="button">
-          reset
+          сбросить
         </button>
       </div>
     </div>
