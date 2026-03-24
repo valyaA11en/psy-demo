@@ -1,26 +1,22 @@
 # api-core
 
-Основной NestJS API платформы.
+Основной NestJS API платформы онлайн-консультаций.
 
-## Текущий состав
+## Что реализовано
 
-- инициализация NestJS-приложения
-- Prisma schema для основы auth/RBAC/profiles/consent/audit
-- auth-модуль с register/login/refresh/logout/logout-all
-- JWT access token и refresh token rotation
-- пользовательские endpoints самообслуживания
-- публичный каталог
-- профиль психолога и специализации для самообслуживания
-- правила доступности, исключения и слоты записи
-- оркестрация бронирования с транзакционным резервированием слота
-- тестовые платежи для локального end-to-end тестирования
-- тестовое создание видеосессии и временный доступ на подключение
-- in-app уведомления и queue publisher для `notification-worker`
-- публикация realtime events через Redis для bookings, payments и готовности сессии
-- Swagger
-- Dockerfile и шаблон env
+- регистрация, вход, refresh token rotation, logout и logout-all
+- JWT auth, RBAC и audit log
+- публичный каталог психологов
+- профили психологов и специализации
+- weekly availability rules, blackout periods и appointment slots
+- booking flow с idempotency key
+- mock payments
+- video session access flow
+- notifications, notification preferences и Telegram linking
+- Redis queue publishing для `notification-worker` и `booking-slot-worker`
+- realtime event publishing для `ws-gateway`
 
-## Реализованные endpoints
+## Основные endpoints
 
 - `GET /api/v1/health`
 - `POST /api/v1/auth/register`
@@ -75,7 +71,7 @@
 ## Локальный запуск
 
 1. Скопировать `.env.example` в `.env`
-2. Указать `DATABASE_URL`
+2. Заполнить `DATABASE_URL` и JWT secrets
 3. Выполнить:
 
 ```bash
@@ -86,30 +82,39 @@ npx prisma db seed
 npm run start:dev
 ```
 
-Swagger будет доступен по `/docs`.
+## Важные env-переменные
 
-## Демо-пользователи
+- `SWAGGER_ENABLED=false`
+- `SEED_DEMO_DATA=false`
+- `THROTTLE_TTL=60`
+- `THROTTLE_LIMIT=20`
+- `AUTH_THROTTLE_TTL=60`
+- `AUTH_THROTTLE_LIMIT=5`
+- `WEBHOOK_THROTTLE_TTL=60`
+- `WEBHOOK_THROTTLE_LIMIT=15`
+- `WEBHOOK_SIGNING_SECRET=...`
+- `BOOKING_SLOT_QUEUE_KEY=consultations.booking-slots.v1`
+- `NOTIFICATION_QUEUE_KEY=consultations.notifications.v1`
 
-- `admin@example.com` / `Admin12345!`
-- `psychologist@example.com` / `Psychologist123!`
-- `client@example.com` / `Client12345!`
+`/docs` доступен только если `SWAGGER_ENABLED=true`.
 
-## Примечания
+## Demo seed
 
-- Стартовая SQL-миграция сгенерирована в `prisma/migrations/20260323161000_init/migration.sql`
-- Миграция уведомлений лежит в `prisma/migrations/20260324103000_add_notifications/migration.sql`
-- Фильтры каталога сейчас поддерживают `q`, `specialization`, `language`, `format`, `priceMin`, `priceMax`, `sort`, `page`, `limit`
-- Генерация доступности строится на недельных правилах, исключениях доступности, локальных окнах с учётом часового пояса и хранении слотов в UTC
-- `availability_exceptions` блокируют автогенерацию слотов; активное исключение нельзя наложить на ручной, удерживаемый или забронированный слот
-- `api-core` публикует rebuild jobs для `booking-slot-worker` после изменений правил и исключений доступности
-- Создание бронирования требует `Idempotency-Key` и атомарно переводит слот из `open` в `booked`
-- История статусов хранится в `consultations` и `consultation_status_history`
-- Платежи опираются на `payments` и `payment_events`
-- Уведомления опираются на `notifications`; delivery выполняет отдельный Go worker через Redis queue
-- Создание платежа тоже требует `Idempotency-Key`; текущий провайдер — тестовая платёжная песочница для локального и демонстрационного использования
-- Видеосессия создаётся лениво: после успешной оплаты `video-sessions` выдаёт тестовую комнату и короткоживущий токен на подключение
-- Админам намеренно запрещён доступ к ссылкам на сессию и токенам доступа, чтобы исключить избыточный доступ к приватным консультациям
-- `api-core` публикует минимальные доменные события в Redis; `ws-gateway` их потребляет, а клиентское приложение перечитывает защищённые данные по REST
-- `api-core` также ставит created-notifications в Redis queue, а `notification-worker` завершает их доставку и retry
-- Демо-seed включает одобренный профиль психолога, активные правила доступности, будущие свободные слоты, одну запланированную консультацию и стартовые уведомления
-- Хранение файлов и более богатые административные сценарии пока остаются следующими шагами
+Demo-данные выключены по умолчанию. Чтобы создать локальные demo-аккаунты и тестовые сущности, запускайте seed с `SEED_DEMO_DATA=true`.
+
+Локальный набор demo-аккаунтов:
+
+- `admin@example.com / Admin12345!`
+- `psychologist@example.com / Psychologist123!`
+- `client@example.com / Client12345!`
+
+Не включайте этот режим на общем стенде или production-like окружении.
+
+## Security notes
+
+- внутренний Telegram consume endpoint должен вызываться только через `telegram-link-webhook`
+- внешний доступ к `/api/v1/internal/*` режется на уровне `nginx`
+- админам намеренно не выдаются session links и video access tokens
+- refresh token хранится в `HttpOnly` cookie
+- throttling включён глобально через `@nestjs/throttler`
+- для `auth` и internal webhook используются отдельные более жёсткие throttle-профили

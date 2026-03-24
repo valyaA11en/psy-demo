@@ -18,7 +18,7 @@ async function bootstrap() {
       configService.get<string>("WEB_APP_ORIGIN", "http://localhost:3000"),
     ),
   );
-  const swaggerEnabled = configService.get<string>("SWAGGER_ENABLED", "true") === "true";
+  const swaggerEnabled = configService.get<string>("SWAGGER_ENABLED", "false") === "true";
 
   app.setGlobalPrefix("api/v1");
   app.use(helmet());

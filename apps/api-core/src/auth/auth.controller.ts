@@ -9,6 +9,7 @@ import {
   UseGuards,
 } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
+import { Throttle } from "@nestjs/throttler";
 import type { Request, Response } from "express";
 import { CurrentUser } from "../common/decorators/current-user.decorator";
 import { JwtAuthGuard } from "../common/guards/jwt-auth.guard";
@@ -22,6 +23,7 @@ import { RegisterDto } from "./dto/register.dto";
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
+  @Throttle({ auth: {} })
   @Post("register")
   async register(
     @Body() dto: RegisterDto,
@@ -31,6 +33,7 @@ export class AuthController {
     return this.authService.register(dto, request, response);
   }
 
+  @Throttle({ auth: {} })
   @HttpCode(HttpStatus.OK)
   @Post("login")
   async login(
@@ -41,6 +44,7 @@ export class AuthController {
     return this.authService.login(dto, request, response);
   }
 
+  @Throttle({ auth: {} })
   @HttpCode(HttpStatus.OK)
   @Post("refresh")
   async refresh(

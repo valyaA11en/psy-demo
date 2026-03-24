@@ -123,4 +123,8 @@ return [
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
 
+    'show_demo_credentials' => (bool) env('SHOW_DEMO_CREDENTIALS', false),
+
+    'admin_allowed_ips' => env('ADMIN_ALLOWED_IPS', ''),
+
 ];

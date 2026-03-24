@@ -9,6 +9,8 @@ import { humanizeCode } from "@/lib/format";
 type Mode = "login" | "register";
 type AccountType = "client" | "psychologist";
 
+const showDemoCredentials = process.env.NEXT_PUBLIC_SHOW_DEMO_CREDENTIALS === "true";
+
 export function AuthPanel() {
   const router = useRouter();
   const { login, register, ready, user } = useAuth();
@@ -194,14 +196,16 @@ export function AuthPanel() {
         {error ? <div className="notice notice-error">{error}</div> : null}
         {success ? <div className="notice notice-success">{success}</div> : null}
 
-        <div className="surface surface-muted">
-          <p className="caption">Демо-аккаунты</p>
-          <ul className="list-block">
-            <li>`client@example.com / Client12345!`</li>
-            <li>`psychologist@example.com / Psychologist123!`</li>
-            <li>`admin@example.com / Admin12345!`</li>
-          </ul>
-        </div>
+        {showDemoCredentials ? (
+          <div className="surface surface-muted">
+            <p className="caption">Локальные demo-аккаунты</p>
+            <ul className="list-block">
+              <li>`client@example.com / Client12345!`</li>
+              <li>`psychologist@example.com / Psychologist123!`</li>
+              <li>`admin@example.com / Admin12345!`</li>
+            </ul>
+          </div>
+        ) : null}
       </div>
     </section>
   );

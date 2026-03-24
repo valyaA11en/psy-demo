@@ -7,6 +7,7 @@ import { AvailabilityModule } from "./availability/availability.module";
 import { AuditModule } from "./audit/audit.module";
 import { BookingsModule } from "./bookings/bookings.module";
 import { CatalogModule } from "./catalog/catalog.module";
+import { createThrottlerOptions } from "./common/throttle/throttle.config";
 import { HttpExceptionFilter } from "./common/filters/http-exception.filter";
 import { RolesGuard } from "./common/guards/roles.guard";
 import { ResponseEnvelopeInterceptor } from "./common/interceptors/response-envelope.interceptor";
@@ -28,12 +29,7 @@ import { VideoSessionsModule } from "./video-sessions/video-sessions.module";
     }),
     ThrottlerModule.forRootAsync({
       inject: [ConfigService],
-      useFactory: (configService: ConfigService) => [
-        {
-          ttl: configService.get<number>("THROTTLE_TTL", 60) * 1000,
-          limit: configService.get<number>("THROTTLE_LIMIT", 20),
-        },
-      ],
+      useFactory: (configService: ConfigService) => createThrottlerOptions(configService),
     }),
     PrismaModule,
     AuditModule,

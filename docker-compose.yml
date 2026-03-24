@@ -26,6 +26,7 @@ services:
       PORT: 3000
       NEXT_PUBLIC_API_BASE_URL: http://localhost/api/v1
       NEXT_PUBLIC_WS_URL: http://localhost
+      NEXT_PUBLIC_SHOW_DEMO_CREDENTIALS: ${NEXT_PUBLIC_SHOW_DEMO_CREDENTIALS:-false}
       API_INTERNAL_BASE_URL: http://api-core:4000/api/v1
     depends_on:
       - api-core
@@ -50,9 +51,14 @@ services:
       TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME}
       TELEGRAM_LINK_TOKEN_TTL_MIN: ${TELEGRAM_LINK_TOKEN_TTL_MIN}
       WEBHOOK_SIGNING_SECRET: ${WEBHOOK_SIGNING_SECRET}
+      AUTH_THROTTLE_TTL: ${AUTH_THROTTLE_TTL:-60}
+      AUTH_THROTTLE_LIMIT: ${AUTH_THROTTLE_LIMIT:-5}
+      WEBHOOK_THROTTLE_TTL: ${WEBHOOK_THROTTLE_TTL:-60}
+      WEBHOOK_THROTTLE_LIMIT: ${WEBHOOK_THROTTLE_LIMIT:-15}
       BOOKING_SLOT_QUEUE_KEY: ${BOOKING_SLOT_QUEUE_KEY}
       NOTIFICATION_QUEUE_KEY: ${NOTIFICATION_QUEUE_KEY}
-      SWAGGER_ENABLED: "true"
+      SWAGGER_ENABLED: ${SWAGGER_ENABLED:-false}
+      SEED_DEMO_DATA: ${SEED_DEMO_DATA:-false}
     depends_on:
       - postgres
       - redis
@@ -93,9 +99,11 @@ services:
       DB_USERNAME: ${POSTGRES_USER}
       DB_PASSWORD: ${POSTGRES_PASSWORD}
       SESSION_DRIVER: file
-      SESSION_SECURE_COOKIE: "false"
+      SESSION_SECURE_COOKIE: ${ADMIN_SESSION_SECURE_COOKIE:-false}
       CACHE_STORE: file
       QUEUE_CONNECTION: sync
+      SHOW_DEMO_CREDENTIALS: ${SHOW_DEMO_CREDENTIALS:-false}
+      ADMIN_ALLOWED_IPS: ${ADMIN_ALLOWED_IPS:-127.0.0.1,::1}
     depends_on:
       - postgres
       - redis
@@ -196,9 +204,6 @@ services:
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
     volumes:
       - minio_data:/data
-    ports:
-      - "${MINIO_API_PORT:-9000}:9000"
-      - "${MINIO_CONSOLE_PORT:-9001}:9001"
     networks:
       - data
 

@@ -14,6 +14,16 @@ import { DateTime } from "luxon";
 
 const prisma = new PrismaClient();
 
+function envFlag(name: string, defaultValue = false) {
+  const rawValue = process.env[name];
+
+  if (!rawValue) {
+    return defaultValue;
+  }
+
+  return ["1", "true", "yes", "on"].includes(rawValue.toLowerCase());
+}
+
 async function ensureRole(code: string, name: string) {
   return prisma.role.upsert({
     where: { code },
@@ -45,6 +55,11 @@ async function main() {
     ensureRole("admin", "Администратор"),
     ensureRole("superadmin", "Суперадмин"),
   ]);
+
+  if (!envFlag("SEED_DEMO_DATA", false)) {
+    console.log("SEED_DEMO_DATA=false, seeded only base reference roles.");
+    return;
+  }
 
   const adminPassword = await bcrypt.hash("Admin12345!", 10);
   const psychologistPassword = await bcrypt.hash("Psychologist123!", 10);

@@ -1,71 +1,29 @@
 # Консультации с психологом
 
-Production-like pet project платформы онлайн-консультаций с психологами.
+Production-like pet project full-stack платформы для онлайн-консультаций с психологами.
 
 ## Стек
 
 - Frontend: Next.js
 - Core API: NestJS
 - Realtime: NestJS WebSocket gateway
-- Фоновые сервисы: Go
-- Админ-панель: Laravel
-- Данные: PostgreSQL, Redis, S3-compatible storage
+- Workers: Go
+- Admin panel: Laravel
+- Data: PostgreSQL, Redis, S3-compatible storage
 - Edge: Nginx
-- Контейнеризация: Docker Compose
+- Infrastructure: Docker Compose
 
-## Что уже подготовлено
+## Что уже реализовано
 
-- архитектурный blueprint системы
-- продуктовые и security-требования
-- стандарты репозитория и GitHub-оформления
-- Docker и схема сетевого взаимодействия
-- карта БД и API-модулей
-- разделение MVP/V2
-- рабочий `apps/api-core` с auth, refresh sessions, публичным каталогом, профилями психологов, слотами, бронированиями, тестовыми платежами, уведомлениями и доступом к видеосессии
-- рабочий `apps/web-app` с каталогом, auth, кабинетом, записью, тестовой оплатой, уведомлениями и экраном доступа к сессии
-- рабочий `apps/ws-gateway` с JWT-аутентификацией сокетов, Redis pub/sub и обновлением дашборда в реальном времени
-- рабочий `apps/admin-panel` на Laravel для модерации, жалоб, оплат, управления статусами пользователей и аудита
-- рабочий `services/booking-slot-worker` на Go для фоновой генерации и сверки слотов по `availability_rules`
-- рабочий `services/notification-worker` на Go для очереди уведомлений, retry и фоновой доставки `in_app/email/telegram` уведомлений
+- `apps/api-core` с auth, catalog, availability, bookings, mock payments, notifications и video access flow
+- `apps/web-app` с каталогом, auth, dashboard, booking flow и realtime updates
+- `apps/ws-gateway` с JWT socket auth и Redis pub/sub
+- `apps/admin-panel` для moderation, complaints, payments и audit logs
+- `services/booking-slot-worker`
+- `services/notification-worker`
+- `services/telegram-link-webhook`
 
-Основной документ: [docs/system-blueprint.md](docs/system-blueprint.md)
-
-## Назначение репозитория
-
-Репозиторий оформляется как серьёзный инженерный pet project для портфолио. Архитектура и документация заранее закладывают корректные security- и privacy-границы, чтобы реализацию можно было наращивать без переделки модели доступа.
-
-## Ключевые принципы
-
-- приватность по проектированию
-- минимально необходимые привилегии
-- production-like границы сервисов
-- аудит важных административных действий
-- минимизация экспонирования чувствительных данных
-
-## Текущий демо-сценарий
-
-1. Открыть публичный каталог в `apps/web-app`
-2. Войти или зарегистрироваться как клиент
-3. Создать бронирование из карточки психолога
-4. Провести тестовую оплату из кабинета
-5. Увидеть создание уведомлений в кабинете
-6. Посмотреть обновление данных в реальном времени
-7. Запросить короткоживущий токен доступа к сессии
-
-## Следующие шаги
-
-1. Добавить пользовательские notification preferences и связку Telegram/email opt-in
-2. Добавить UI для `availability_exceptions` и управления blackout-периодами в `apps/web-app`
-3. Расширить пользовательские сценарии аккаунта и визуальную систему в `apps/web-app`
-4. Расширить CI до lint/test/build по мере роста кодовой базы
-
-## Стандарты репозитория
-
-- `CONTRIBUTING.md`
-- `SECURITY.md`
-- `.env.example`
-- `.github/workflows/ci.yml`
-- `.github/PULL_REQUEST_TEMPLATE.md`
+Основной документ: [system-blueprint.md](C:/Users/vakhm/OneDrive/Desktop/project/consultations%20with%20a%20psychologist/docs/system-blueprint.md)
 
 ## Локальный запуск
 
@@ -73,4 +31,35 @@ Production-like pet project платформы онлайн-консультац
 docker compose up --build
 ```
 
-На текущем этапе в репозитории уже есть архитектурный пакет, рабочий `api-core`, realtime `ws-gateway`, демонстрационное `Next.js`-приложение, Laravel admin-panel и Go worker для очереди уведомлений.
+## Security defaults
+
+Проект поднимается с более жёсткими дефолтами:
+
+- `SWAGGER_ENABLED=false`
+- `SEED_DEMO_DATA=false`
+- `SHOW_DEMO_CREDENTIALS=false`
+- `NEXT_PUBLIC_SHOW_DEMO_CREDENTIALS=false`
+- `ADMIN_ALLOWED_IPS=127.0.0.1,::1`
+
+Дополнительно:
+
+- внешний доступ к `/api/v1/internal/*` блокируется через `nginx`
+- demo seed и demo credentials нужно включать явно
+- Redis и Postgres остаются во внутренней Docker-сети
+- MinIO по умолчанию не публикует порты наружу и доступен только внутри Docker-сети
+
+## Demo режим
+
+Для локального demo можно явно включить:
+
+- `SEED_DEMO_DATA=true`
+- `SHOW_DEMO_CREDENTIALS=true`
+- `NEXT_PUBLIC_SHOW_DEMO_CREDENTIALS=true`
+
+После этого появятся demo-аккаунты:
+
+- `admin@example.com / Admin12345!`
+- `psychologist@example.com / Psychologist123!`
+- `client@example.com / Client12345!`
+
+Используйте этот режим только локально.
