@@ -53,6 +53,20 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     this.logger.log(`client disconnected: ${client.id} user=${user?.sub ?? "unknown"}`);
   }
 
+  disconnectRevokedSession(sessionId: string) {
+    for (const client of this.server.sockets.sockets.values()) {
+      const user = client.data.user as AuthenticatedSocketUser | undefined;
+      if (user?.sessionId !== sessionId) {
+        continue;
+      }
+
+      client.emit("ws.revoked", {
+        message: "Session has been revoked",
+      });
+      client.disconnect(true);
+    }
+  }
+
   emitDomainEvent(event: RealtimeDomainEvent) {
     const rooms = [
       ...event.audience.userIds.map((userId) => this.userRoom(userId)),

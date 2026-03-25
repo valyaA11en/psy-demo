@@ -2,6 +2,8 @@ import {
   AppointmentSlotSource,
   AppointmentSlotStatus,
   ConsultationStatus,
+  NotificationChannel,
+  NotificationStatus,
   PrismaClient,
   PsychologistApprovalStatus,
   UserStatus,
@@ -11,6 +13,16 @@ import bcrypt from "bcryptjs";
 import { DateTime } from "luxon";
 
 const prisma = new PrismaClient();
+
+function envFlag(name: string, defaultValue = false) {
+  const rawValue = process.env[name];
+
+  if (!rawValue) {
+    return defaultValue;
+  }
+
+  return ["1", "true", "yes", "on"].includes(rawValue.toLowerCase());
+}
 
 async function ensureRole(code: string, name: string) {
   return prisma.role.upsert({
@@ -43,6 +55,11 @@ async function main() {
     ensureRole("admin", "Администратор"),
     ensureRole("superadmin", "Суперадмин"),
   ]);
+
+  if (!envFlag("SEED_DEMO_DATA", false)) {
+    console.log("SEED_DEMO_DATA=false, seeded only base reference roles.");
+    return;
+  }
 
   const adminPassword = await bcrypt.hash("Admin12345!", 10);
   const psychologistPassword = await bcrypt.hash("Psychologist123!", 10);
@@ -150,6 +167,60 @@ async function main() {
     },
   });
 
+  await prisma.notificationPreference.upsert({
+    where: { userId: client.id },
+    update: {
+      inAppEnabled: true,
+      emailEnabled: true,
+      telegramEnabled: true,
+      bookingUpdatesEnabled: true,
+      paymentUpdatesEnabled: true,
+      sessionUpdatesEnabled: true,
+      systemUpdatesEnabled: true,
+      telegramChatId: "123456789",
+      telegramLinkedAt: new Date(),
+    },
+    create: {
+      userId: client.id,
+      inAppEnabled: true,
+      emailEnabled: true,
+      telegramEnabled: true,
+      bookingUpdatesEnabled: true,
+      paymentUpdatesEnabled: true,
+      sessionUpdatesEnabled: true,
+      systemUpdatesEnabled: true,
+      telegramChatId: "123456789",
+      telegramLinkedAt: new Date(),
+    },
+  });
+
+  await prisma.notificationPreference.upsert({
+    where: { userId: psychologist.id },
+    update: {
+      inAppEnabled: true,
+      emailEnabled: true,
+      telegramEnabled: false,
+      bookingUpdatesEnabled: true,
+      paymentUpdatesEnabled: true,
+      sessionUpdatesEnabled: true,
+      systemUpdatesEnabled: true,
+      telegramChatId: null,
+      telegramLinkedAt: null,
+    },
+    create: {
+      userId: psychologist.id,
+      inAppEnabled: true,
+      emailEnabled: true,
+      telegramEnabled: false,
+      bookingUpdatesEnabled: true,
+      paymentUpdatesEnabled: true,
+      sessionUpdatesEnabled: true,
+      systemUpdatesEnabled: true,
+      telegramChatId: null,
+      telegramLinkedAt: null,
+    },
+  });
+
   const anxiety = await prisma.specialization.upsert({
     where: { slug: "anxiety" },
     update: { name: "Тревога" },
@@ -193,6 +264,12 @@ async function main() {
     create: {
       psychologistProfileId: psychologist.id,
       specializationId: burnout.id,
+    },
+  });
+
+  await prisma.review.deleteMany({
+    where: {
+      psychologistUserId: psychologist.id,
     },
   });
 
@@ -292,6 +369,16 @@ async function main() {
     },
   });
 
+  const completedSlot = await prisma.appointmentSlot.create({
+    data: {
+      psychologistProfileId: psychologist.id,
+      startsAt: localBase.minus({ days: 5 }).set({ hour: 12, minute: 0 }).toUTC().toJSDate(),
+      endsAt: localBase.minus({ days: 5 }).set({ hour: 12, minute: 50 }).toUTC().toJSDate(),
+      status: AppointmentSlotStatus.booked,
+      source: AppointmentSlotSource.manual,
+    },
+  });
+
   const bookedSlot = await prisma.appointmentSlot.create({
     data: {
       psychologistProfileId: psychologist.id,
@@ -302,7 +389,19 @@ async function main() {
     },
   });
 
-  const consultation = await prisma.consultation.create({
+  const completedConsultation = await prisma.consultation.create({
+    data: {
+      clientUserId: client.id,
+      psychologistUserId: psychologist.id,
+      slotId: completedSlot.id,
+      status: ConsultationStatus.completed,
+      scheduledAt: completedSlot.startsAt,
+      clientMessage: "Хотела разобраться с тревогой и постоянным напряжением.",
+      idempotencyKey: "seed-booking-completed-0001",
+    },
+  });
+
+  const scheduledConsultation = await prisma.consultation.create({
     data: {
       clientUserId: client.id,
       psychologistUserId: psychologist.id,
@@ -316,12 +415,55 @@ async function main() {
 
   await prisma.consultationStatusHistory.create({
     data: {
-      consultationId: consultation.id,
+      consultationId: completedConsultation.id,
       fromStatus: null,
       toStatus: ConsultationStatus.scheduled,
       changedByUserId: client.id,
       changedByRole: "client",
       reasonCode: "booking_created",
+    },
+  });
+
+  await prisma.consultationStatusHistory.create({
+    data: {
+      consultationId: completedConsultation.id,
+      fromStatus: ConsultationStatus.scheduled,
+      toStatus: ConsultationStatus.completed,
+      changedByUserId: psychologist.id,
+      changedByRole: "psychologist",
+      reasonCode: "consultation_completed",
+    },
+  });
+
+  await prisma.consultationStatusHistory.create({
+    data: {
+      consultationId: scheduledConsultation.id,
+      fromStatus: null,
+      toStatus: ConsultationStatus.scheduled,
+      changedByUserId: client.id,
+      changedByRole: "client",
+      reasonCode: "booking_created",
+    },
+  });
+
+  await prisma.review.create({
+    data: {
+      consultationId: completedConsultation.id,
+      clientUserId: client.id,
+      psychologistUserId: psychologist.id,
+      rating: 5,
+      text: "Очень спокойная и бережная консультация. После встречи стало проще структурировать мысли.",
+      status: "published",
+    },
+  });
+
+  await prisma.psychologistProfile.update({
+    where: {
+      userId: psychologist.id,
+    },
+    data: {
+      ratingAvg: 5,
+      reviewsCount: 1,
     },
   });
 
@@ -359,6 +501,79 @@ async function main() {
         granted: true,
         grantedAt: new Date(),
         source: "psychologist-application",
+      },
+    ],
+  });
+
+  await prisma.notification.deleteMany({
+    where: {
+      userId: {
+        in: [client.id, psychologist.id],
+      },
+    },
+  });
+
+  await prisma.notification.createMany({
+    data: [
+      {
+        userId: client.id,
+        channel: NotificationChannel.in_app,
+        type: "booking.created",
+        title: "Бронирование создано",
+        body: "Запись на консультацию успешно создана.",
+        dedupKey: "seed:booking-created:client",
+        status: NotificationStatus.sent,
+        attempts: 1,
+        queuedAt: new Date(),
+        sentAt: new Date(),
+      },
+      {
+        userId: psychologist.id,
+        channel: NotificationChannel.in_app,
+        type: "booking.created",
+        title: "Новая консультация",
+        body: "У вас появилась новая запланированная консультация.",
+        dedupKey: "seed:booking-created:psychologist",
+        status: NotificationStatus.sent,
+        attempts: 1,
+        queuedAt: new Date(),
+        sentAt: new Date(),
+      },
+      {
+        userId: client.id,
+        channel: NotificationChannel.in_app,
+        type: "payment.created",
+        title: "Платёж ожидает подтверждения",
+        body: "Для консультации создан тестовый платёж.",
+        dedupKey: "seed:payment-created:client",
+        status: NotificationStatus.queued,
+        attempts: 0,
+        queuedAt: new Date(),
+      },
+      {
+        userId: client.id,
+        channel: NotificationChannel.email,
+        type: "booking.created",
+        title: "Подтверждение записи",
+        body: "На вашу почту отправлено подтверждение записи на консультацию.",
+        dedupKey: "seed:booking-created:client-email",
+        status: NotificationStatus.queued,
+        attempts: 0,
+        queuedAt: new Date(),
+      },
+      {
+        userId: client.id,
+        channel: NotificationChannel.telegram,
+        type: "booking.created",
+        title: "Напоминание в Telegram",
+        body: "Тестовое уведомление о записи готово к отправке в Telegram.",
+        dedupKey: "seed:booking-created:client-telegram",
+        status: NotificationStatus.queued,
+        attempts: 0,
+        queuedAt: new Date(),
+        payloadJson: {
+          telegramChatId: "123456789",
+        },
       },
     ],
   });

@@ -3,27 +3,127 @@
 import Link from "next/link";
 import { startTransition, useEffect, useEffectEvent, useState } from "react";
 import { io } from "socket.io-client";
+import { AvailabilityExceptionsPanel } from "@/components/availability-exceptions-panel";
+import { AvailabilityRulesPanel } from "@/components/availability-rules-panel";
+import { BookingComplaintPanel } from "@/components/booking-complaint-panel";
+import { BookingReviewPanel } from "@/components/booking-review-panel";
+import { NotificationPreferencesPanel } from "@/components/notification-preferences-panel";
+import { AppointmentSlotsPanel } from "@/components/appointment-slots-panel";
+import { PsychologistFilesPanel } from "@/components/psychologist-files-panel";
+import { PsychologistProfilePanel } from "@/components/psychologist-profile-panel";
 import { useAuth } from "@/components/auth-provider";
 import { PaymentActions } from "@/components/payment-actions";
 import { formatCompactDateTime, formatDateRange, formatMoney, humanizeCode } from "@/lib/format";
 import type {
+  AvailabilityException,
+  AvailabilityRule,
+  AvailabilitySlot,
   AuthUser,
   BookingListResponse,
+  ComplaintListResponse,
+  ComplaintRecord,
   DashboardBooking,
+  FileDownloadSession,
+  FileUploadSession,
+  FilesListResponse,
+  MyAvailabilitySlotsResponse,
+  NotificationListResponse,
+  NotificationPreferences,
+  NotificationRecord,
   PaymentListResponse,
   PaymentRecord,
+  PsychologistWorkspaceProfile,
+  PrivateFileRecord,
   RealtimeDomainEvent,
+  Specialization,
+  TelegramLinkSession,
 } from "@/lib/types";
+
+type AvailabilitySlotFilters = {
+  dateFrom: string;
+  dateTo: string;
+  timezone: string;
+  status: string | null;
+  limit: number;
+};
+
+function toDateInputValue(date: Date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function createDefaultAvailabilitySlotFilters(): AvailabilitySlotFilters {
+  const startDate = new Date();
+  const endDate = new Date(startDate);
+  endDate.setDate(endDate.getDate() + 14);
+
+  return {
+    dateFrom: toDateInputValue(startDate),
+    dateTo: toDateInputValue(endDate),
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+    status: null,
+    limit: 20,
+  };
+}
+
+function buildAvailabilitySlotsQuery(filters: AvailabilitySlotFilters) {
+  const searchParams = new URLSearchParams();
+
+  searchParams.set("dateFrom", filters.dateFrom);
+  searchParams.set("dateTo", filters.dateTo);
+  searchParams.set("timezone", filters.timezone);
+  searchParams.set("limit", String(filters.limit));
+
+  if (filters.status) {
+    searchParams.set("status", filters.status);
+  }
+
+  return searchParams.toString();
+}
+
+function resolveUploadMimeType(file: File) {
+  if (file.type.trim()) {
+    return file.type.trim().toLowerCase();
+  }
+
+  const normalizedName = file.name.toLowerCase();
+  if (normalizedName.endsWith(".pdf")) {
+    return "application/pdf";
+  }
+
+  if (normalizedName.endsWith(".png")) {
+    return "image/png";
+  }
+
+  if (normalizedName.endsWith(".webp")) {
+    return "image/webp";
+  }
+
+  return "image/jpeg";
+}
 
 export function DashboardClient() {
   const { ready, accessToken, user, request } = useAuth();
   const [profile, setProfile] = useState<AuthUser | null>(null);
   const [bookings, setBookings] = useState<DashboardBooking[]>([]);
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
+  const [availabilityRules, setAvailabilityRules] = useState<AvailabilityRule[]>([]);
+  const [availabilitySlots, setAvailabilitySlots] = useState<AvailabilitySlot[]>([]);
+  const [availabilitySlotFilters, setAvailabilitySlotFilters] = useState<AvailabilitySlotFilters>(() =>
+    createDefaultAvailabilitySlotFilters(),
+  );
+  const [availabilityExceptions, setAvailabilityExceptions] = useState<AvailabilityException[]>([]);
+  const [files, setFiles] = useState<PrivateFileRecord[]>([]);
+  const [psychologistWorkspaceProfile, setPsychologistWorkspaceProfile] = useState<PsychologistWorkspaceProfile | null>(null);
+  const [specializationsCatalog, setSpecializationsCatalog] = useState<Specialization[]>([]);
+  const [notificationPreferences, setNotificationPreferences] = useState<NotificationPreferences | null>(null);
+  const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
+  const [complaints, setComplaints] = useState<ComplaintRecord[]>([]);
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [realtimeState, setRealtimeState] = useState<"idle" | "connecting" | "connected" | "offline">("idle");
   const [realtimeEvents, setRealtimeEvents] = useState<RealtimeDomainEvent[]>([]);
+  const availabilitySlotFiltersKey = JSON.stringify(availabilitySlotFilters);
 
   const loadData = useEffectEvent(async () => {
     if (!user) {
@@ -38,31 +138,321 @@ export function DashboardClient() {
       setProfile(profileData);
 
       if (user.roles.includes("client")) {
-        const [bookingData, paymentData] = await Promise.all([
+        const [bookingData, paymentData, notificationData, preferenceData, complaintData] = await Promise.all([
           request<BookingListResponse>("/bookings/me"),
           request<PaymentListResponse>("/payments/me"),
+          request<NotificationListResponse>("/notifications/me?limit=6"),
+          request<NotificationPreferences>("/notifications/me/preferences"),
+          request<ComplaintListResponse>("/complaints/me?limit=6"),
         ]);
 
         setBookings(bookingData.items);
         setPayments(paymentData.items);
+        setAvailabilityRules([]);
+        setAvailabilitySlots([]);
+        setAvailabilityExceptions([]);
+        setFiles([]);
+        setPsychologistWorkspaceProfile(null);
+        setSpecializationsCatalog([]);
+        setNotificationPreferences(preferenceData);
+        setNotifications(notificationData.items);
+        setUnreadNotifications(notificationData.unreadCount);
+        setComplaints(complaintData.items);
         return;
       }
 
       if (user.roles.includes("psychologist")) {
-        const bookingData = await request<BookingListResponse>("/bookings/psychologist/me");
+        const slotQuery = buildAvailabilitySlotsQuery(availabilitySlotFilters);
+        const [bookingData, notificationData, exceptionData, ruleData, slotData, preferenceData, complaintData, fileData, psychologistProfileData, specializationsData] =
+          await Promise.all([
+          request<BookingListResponse>("/bookings/psychologist/me"),
+          request<NotificationListResponse>("/notifications/me?limit=6"),
+          request<AvailabilityException[]>("/availability/me/exceptions"),
+          request<AvailabilityRule[]>("/availability/me/rules"),
+          request<MyAvailabilitySlotsResponse>(`/availability/me/slots?${slotQuery}`),
+          request<NotificationPreferences>("/notifications/me/preferences"),
+          request<ComplaintListResponse>("/complaints/me?limit=6"),
+          request<FilesListResponse>("/files/me?limit=12"),
+          request<PsychologistWorkspaceProfile>("/psychologists/me"),
+          request<Specialization[]>("/catalog/specializations", undefined, { auth: false }),
+        ]);
         setBookings(bookingData.items);
         setPayments([]);
+        setAvailabilityRules(ruleData);
+        setAvailabilitySlots(slotData.items);
+        setAvailabilityExceptions(exceptionData);
+        setFiles(fileData.items);
+        setPsychologistWorkspaceProfile(psychologistProfileData);
+        setSpecializationsCatalog(specializationsData);
+        setNotificationPreferences(preferenceData);
+        setNotifications(notificationData.items);
+        setUnreadNotifications(notificationData.unreadCount);
+        setComplaints(complaintData.items);
         return;
       }
 
       setBookings([]);
       setPayments([]);
+      setAvailabilityRules([]);
+      setAvailabilitySlots([]);
+      setAvailabilityExceptions([]);
+      setFiles([]);
+      setPsychologistWorkspaceProfile(null);
+      setSpecializationsCatalog([]);
+      setComplaints([]);
+      const [notificationData, preferenceData] = await Promise.all([
+        request<NotificationListResponse>("/notifications/me?limit=6"),
+        request<NotificationPreferences>("/notifications/me/preferences"),
+      ]);
+      setNotificationPreferences(preferenceData);
+      setNotifications(notificationData.items);
+      setUnreadNotifications(notificationData.unreadCount);
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "Не удалось загрузить кабинет");
     } finally {
       setLoading(false);
     }
   });
+
+  function markNotificationRead(notificationId: string) {
+    startTransition(() => {
+      void request<NotificationRecord>(`/notifications/${notificationId}/read`, {
+        method: "POST",
+      })
+        .then(() => loadData())
+        .catch((nextError: Error) => {
+          setError(nextError.message);
+        });
+    });
+  }
+
+  function markAllNotificationsRead() {
+    startTransition(() => {
+      void request<{ updatedCount: number }>("/notifications/me/read-all", {
+        method: "POST",
+      })
+        .then(() => loadData())
+        .catch((nextError: Error) => {
+          setError(nextError.message);
+        });
+    });
+  }
+
+  async function createAvailabilityException(input: {
+    startsAt: string;
+    endsAt: string;
+    reason?: string;
+  }) {
+    await request<AvailabilityException>("/availability/me/exceptions", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+    await loadData();
+  }
+
+  async function toggleAvailabilityException(exception: AvailabilityException) {
+    await request<AvailabilityException>(`/availability/me/exceptions/${exception.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        isActive: !exception.isActive,
+      }),
+    });
+    await loadData();
+  }
+
+  async function deleteAvailabilityException(exceptionId: string) {
+    await request<{ id: string; deleted: boolean }>(`/availability/me/exceptions/${exceptionId}`, {
+      method: "DELETE",
+    });
+    await loadData();
+  }
+
+  async function updateNotificationPreferences(input: {
+    inAppEnabled?: boolean;
+    emailEnabled?: boolean;
+    telegramEnabled?: boolean;
+    bookingUpdatesEnabled?: boolean;
+    paymentUpdatesEnabled?: boolean;
+    sessionUpdatesEnabled?: boolean;
+    systemUpdatesEnabled?: boolean;
+    unlinkTelegram?: boolean;
+  }) {
+    await request<NotificationPreferences>("/notifications/me/preferences", {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    });
+    await loadData();
+  }
+
+  async function createTelegramLink() {
+    return request<TelegramLinkSession>("/notifications/me/preferences/telegram-link", {
+      method: "POST",
+    });
+  }
+
+  async function createReview(input: { consultationId: string; rating: number; text?: string }) {
+    await request(`/reviews`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+    await loadData();
+  }
+
+  async function createComplaint(input: { consultationId: string; type: string; text: string }) {
+    await request(`/complaints`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+    await loadData();
+  }
+
+  async function createAvailabilityRule(input: {
+    weekday: string;
+    startTime: string;
+    endTime: string;
+    slotDurationMin: number;
+    bufferMin: number;
+    timezone: string;
+    isActive?: boolean;
+  }) {
+    await request<AvailabilityRule>("/availability/me/rules", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+    await loadData();
+  }
+
+  async function updateAvailabilityRule(
+    ruleId: string,
+    input: {
+      weekday?: string;
+      startTime?: string;
+      endTime?: string;
+      slotDurationMin?: number;
+      bufferMin?: number;
+      timezone?: string;
+      isActive?: boolean;
+    },
+  ) {
+    await request<AvailabilityRule>(`/availability/me/rules/${ruleId}`, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    });
+    await loadData();
+  }
+
+  async function deleteAvailabilityRule(ruleId: string) {
+    await request<{ id: string; deleted: boolean }>(`/availability/me/rules/${ruleId}`, {
+      method: "DELETE",
+    });
+    await loadData();
+  }
+
+  async function createManualSlot(input: { startsAt: string; endsAt: string }) {
+    await request<AvailabilitySlot>("/availability/me/slots", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+    await loadData();
+  }
+
+  async function cancelAvailabilitySlot(slotId: string) {
+    await request<{ id: string; status: string }>(`/availability/me/slots/${slotId}`, {
+      method: "DELETE",
+    });
+    await loadData();
+  }
+
+  async function generateAvailabilitySlots(input: {
+    dateFrom: string;
+    dateTo: string;
+    clearOpenGeneratedSlots?: boolean;
+  }) {
+    await request<{ createdCount: number }>("/availability/me/slots/generate", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+    await loadData();
+  }
+
+  async function uploadPsychologistFile(purpose: string, file: File) {
+    const uploadSession = await request<FileUploadSession>("/files/upload-url", {
+      method: "POST",
+      body: JSON.stringify({
+        purpose,
+        originalFilename: file.name,
+        mimeType: resolveUploadMimeType(file),
+        sizeBytes: file.size,
+      }),
+    });
+
+    const uploadResponse = await fetch(uploadSession.upload.url, {
+      method: uploadSession.upload.method,
+      headers: uploadSession.upload.headers,
+      body: file,
+    });
+
+    if (!uploadResponse.ok) {
+      throw new Error("S3 upload не завершился успешно");
+    }
+
+    await request<PrivateFileRecord>(`/files/${uploadSession.file.id}/complete`, {
+      method: "POST",
+    });
+
+    await loadData();
+  }
+
+  async function downloadPsychologistFile(fileId: string) {
+    const downloadSession = await request<FileDownloadSession>(`/files/${fileId}/download-url`);
+    window.open(downloadSession.url, "_blank", "noopener,noreferrer");
+  }
+
+  async function deletePsychologistFile(fileId: string) {
+    await request<{ id: string; deleted: boolean }>(`/files/${fileId}`, {
+      method: "DELETE",
+    });
+    await loadData();
+  }
+
+  async function savePsychologistProfile(input: {
+    publicSlug: string;
+    firstName: string;
+    lastName: string;
+    publicTitle: string;
+    bio: string;
+    experienceYears: number;
+    priceFrom: number;
+    priceTo: number;
+    languages: string[];
+    formats: string[];
+    specializationIds: string[];
+  }) {
+    await request<PsychologistWorkspaceProfile>("/psychologists/me", {
+      method: "PATCH",
+      body: JSON.stringify({
+        publicSlug: input.publicSlug,
+        firstName: input.firstName,
+        lastName: input.lastName,
+        publicTitle: input.publicTitle,
+        bio: input.bio,
+        experienceYears: input.experienceYears,
+        priceFrom: input.priceFrom,
+        priceTo: input.priceTo,
+        languages: input.languages,
+        formats: input.formats,
+      }),
+    });
+
+    await request<PsychologistWorkspaceProfile>("/psychologists/me/specializations", {
+      method: "PUT",
+      body: JSON.stringify({
+        specializationIds: input.specializationIds,
+      }),
+    });
+
+    await loadData();
+  }
 
   useEffect(() => {
     if (!ready || !user) {
@@ -72,7 +462,7 @@ export function DashboardClient() {
     startTransition(() => {
       void loadData();
     });
-  }, [ready, user]);
+  }, [ready, user, availabilitySlotFiltersKey]);
 
   useEffect(() => {
     if (!ready || !user || !accessToken) {
@@ -177,6 +567,10 @@ export function DashboardClient() {
           <span className="caption">realtime</span>
           <strong>{humanizeCode(realtimeState)}</strong>
         </div>
+        <div className="summary-card">
+          <span className="caption">непрочитанные</span>
+          <strong>{unreadNotifications}</strong>
+        </div>
       </div>
 
       {loading ? (
@@ -184,6 +578,36 @@ export function DashboardClient() {
       ) : (
         <div className="dashboard-grid">
           <div className="stack">
+            {user.roles.includes("psychologist") ? (
+              <>
+                <PsychologistProfilePanel
+                  onSave={savePsychologistProfile}
+                  profile={psychologistWorkspaceProfile}
+                  specializations={specializationsCatalog}
+                />
+                <AvailabilityRulesPanel
+                  onCreate={createAvailabilityRule}
+                  onDelete={deleteAvailabilityRule}
+                  onUpdate={updateAvailabilityRule}
+                  rules={availabilityRules}
+                />
+                <AppointmentSlotsPanel
+                  filters={availabilitySlotFilters}
+                  onCancel={cancelAvailabilitySlot}
+                  onCreate={createManualSlot}
+                  onFiltersChange={setAvailabilitySlotFilters}
+                  onGenerate={generateAvailabilitySlots}
+                  slots={availabilitySlots}
+                />
+                <PsychologistFilesPanel
+                  files={files}
+                  onDelete={deletePsychologistFile}
+                  onDownload={downloadPsychologistFile}
+                  onUpload={uploadPsychologistFile}
+                />
+              </>
+            ) : null}
+
             <div className="section-head">
               <div>
                 <h2 className="section-title">Консультации</h2>
@@ -244,6 +668,16 @@ export function DashboardClient() {
                       ) : null}
                     </div>
                   ) : null}
+
+                  {user.roles.includes("client") || booking.review ? (
+                    <BookingReviewPanel booking={booking} onCreate={createReview} />
+                  ) : null}
+
+                  <BookingComplaintPanel
+                    booking={booking}
+                    complaint={complaints.find((item) => item.consultationId === booking.id) ?? null}
+                    onCreate={createComplaint}
+                  />
                 </article>
               ))
             )}
@@ -283,6 +717,93 @@ export function DashboardClient() {
                 </div>
               </div>
             ) : null}
+
+            {user.roles.includes("psychologist") ? (
+              <AvailabilityExceptionsPanel
+                exceptions={availabilityExceptions}
+                onCreate={createAvailabilityException}
+                onDelete={deleteAvailabilityException}
+                onToggle={toggleAvailabilityException}
+              />
+            ) : null}
+
+            <NotificationPreferencesPanel
+              onCreateTelegramLink={createTelegramLink}
+              onUpdate={updateNotificationPreferences}
+              preferences={notificationPreferences}
+            />
+
+            <div className="surface">
+              <p className="caption">Жалобы</p>
+              <h3 className="card-title">Мои обращения</h3>
+              {complaints.length === 0 ? (
+                <p className="section-text">Жалоб пока нет.</p>
+              ) : (
+                <div className="stack compact-stack">
+                  {complaints.map((complaint) => (
+                    <div className="surface surface-muted" key={complaint.id}>
+                      <div className="meta-row">
+                        <strong>{humanizeCode(complaint.type)}</strong>
+                        <span className={`status-badge status-${complaint.status}`}>
+                          {humanizeCode(complaint.status)}
+                        </span>
+                      </div>
+                      <div className="meta-row">
+                        <span>
+                          {complaint.consultation
+                            ? formatCompactDateTime(complaint.consultation.scheduledAt)
+                            : "без привязки"}
+                        </span>
+                        {complaint.target?.displayName ? <span>{complaint.target.displayName}</span> : null}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="surface">
+              <div className="section-head">
+                <div>
+                  <p className="caption">Уведомления</p>
+                  <h3 className="card-title">Лента уведомлений</h3>
+                </div>
+                {unreadNotifications > 0 ? (
+                  <button className="button button-ghost button-small" onClick={markAllNotificationsRead} type="button">
+                    прочитать все
+                  </button>
+                ) : null}
+              </div>
+
+              {notifications.length === 0 ? (
+                <p className="section-text">Уведомлений пока нет.</p>
+              ) : (
+                <div className="stack compact-stack">
+                  {notifications.map((notification) => (
+                    <div className="surface surface-muted" key={notification.id}>
+                      <div className="meta-row">
+                        <strong>{notification.title}</strong>
+                        <span>{formatCompactDateTime(notification.createdAt)}</span>
+                      </div>
+                      <p className="section-text">{notification.body}</p>
+                      <div className="meta-row">
+                        <span>{humanizeCode(notification.type)}</span>
+                        <span>{humanizeCode(notification.channel)} / {notification.readAt ? "прочитано" : "непрочитано"}</span>
+                      </div>
+                      {!notification.readAt ? (
+                        <button
+                          className="button button-ghost button-small"
+                          onClick={() => markNotificationRead(notification.id)}
+                          type="button"
+                        >
+                          отметить как прочитанное
+                        </button>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
 
             <div className="surface">
               <p className="caption">Realtime-активность</p>

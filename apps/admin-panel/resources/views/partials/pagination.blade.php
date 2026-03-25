@@ -7,6 +7,7 @@
             @else
                 <a class="button ghost" href="{{ $paginator->previousPageUrl() }}">Назад</a>
             @endif
+
             @if ($paginator->hasMorePages())
                 <a class="button ghost" href="{{ $paginator->nextPageUrl() }}">Дальше</a>
             @else

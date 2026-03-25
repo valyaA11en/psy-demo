@@ -21,9 +21,11 @@
             <button class="button primary" type="submit">Войти</button>
         </form>
 
-        <div class="panel soft" style="padding: 16px;">
-            <p class="small">Демо-аккаунт администратора</p>
-            <strong>admin@example.com / Admin12345!</strong>
-        </div>
+        @if (config('app.show_demo_credentials'))
+            <div class="panel soft" style="padding: 16px;">
+                <p class="small">Локальные demo-данные</p>
+                <strong>admin@example.com / Admin12345!</strong>
+            </div>
+        @endif
     </section>
 @endsection

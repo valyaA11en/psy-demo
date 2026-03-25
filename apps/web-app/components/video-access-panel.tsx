@@ -2,6 +2,11 @@
 
 import Link from "next/link";
 import { startTransition, useEffect, useEffectEvent, useState } from "react";
+import {
+  LiveKitRoom,
+  RoomAudioRenderer,
+  VideoConference,
+} from "@livekit/components-react";
 import { useAuth } from "@/components/auth-provider";
 import { formatCompactDateTime, humanizeCode } from "@/lib/format";
 import type { SessionInfo, VideoAccessPayload } from "@/lib/types";
@@ -47,9 +52,9 @@ export function VideoAccessPanel({ consultationId }: VideoAccessPanelProps) {
     return (
       <section className="page empty-state">
         <h1 className="section-title">Сначала войдите в систему</h1>
-        <p className="section-text">Только участники консультации могут запросить токен доступа к сессии.</p>
+        <p className="section-text">Только участники консультации могут запросить доступ к видеосессии.</p>
         <Link className="button button-primary" href="/auth">
-          открыть вход
+          Открыть вход
         </Link>
       </section>
     );
@@ -72,16 +77,21 @@ export function VideoAccessPanel({ consultationId }: VideoAccessPanelProps) {
     }
   }
 
+  const shouldRenderLiveKit =
+    access?.provider === "livekit" &&
+    Boolean(access.providerServerUrl) &&
+    Boolean(access.accessToken);
+
   return (
     <section className="page stack">
       <div className="section-head">
         <div>
-          <p className="caption">Тестовый доступ к сессии</p>
+          <p className="caption">Доступ к видеосессии</p>
           <h1 className="section-title">Сессия консультации</h1>
           <p className="section-text">ID консультации: {consultationId}</p>
         </div>
         <Link className="button button-ghost" href="/dashboard">
-          вернуться в кабинет
+          Вернуться в кабинет
         </Link>
       </div>
 
@@ -101,8 +111,8 @@ export function VideoAccessPanel({ consultationId }: VideoAccessPanelProps) {
 
             <div className="list-block">
               <div>запланировано: {formatCompactDateTime(session.scheduledAt)}</div>
-              <div>провайдер комнаты: {session.provider ? humanizeCode(session.provider) : "ещё не создан"}</div>
-              <div>ID комнаты: {session.roomId ?? "ещё не создан"}</div>
+              <div>провайдер: {session.provider ? humanizeCode(session.provider) : "еще не подготовлен"}</div>
+              <div>комната: {session.roomId ?? "еще не создана"}</div>
               <div>доступ откроется: {formatCompactDateTime(session.accessWindow.opensAt)}</div>
               <div>доступ закроется: {formatCompactDateTime(session.accessWindow.closesAt)}</div>
             </div>
@@ -114,14 +124,28 @@ export function VideoAccessPanel({ consultationId }: VideoAccessPanelProps) {
                 onClick={() => void requestAccess()}
                 type="button"
               >
-                {pending ? "выпускаем токен..." : "запросить токен доступа"}
+                {pending ? "Выпускаем токен..." : "Запросить доступ"}
               </button>
-              {session.joinUrl ? (
-                <a className="button button-secondary" href={session.joinUrl} rel="noreferrer" target="_blank">
-                  открыть тестовую страницу подключения
-                </a>
-              ) : null}
             </div>
+
+            {shouldRenderLiveKit ? (
+              <div className="surface surface-muted stack">
+                <p className="caption">LiveKit room</p>
+                <div className="livekit-shell">
+                  <LiveKitRoom
+                    audio={true}
+                    connect={true}
+                    data-lk-theme="default"
+                    serverUrl={access.providerServerUrl!}
+                    token={access.accessToken}
+                    video={true}
+                  >
+                    <VideoConference />
+                    <RoomAudioRenderer />
+                  </LiveKitRoom>
+                </div>
+              </div>
+            ) : null}
           </div>
 
           <div className="surface stack">
@@ -129,8 +153,8 @@ export function VideoAccessPanel({ consultationId }: VideoAccessPanelProps) {
             <ul className="list-block">
               <li>только участники: {session.accessPolicy.participantsOnly ? "да" : "нет"}</li>
               <li>нужна успешная оплата: {session.accessPolicy.requiresSucceededPayment ? "да" : "нет"}</li>
-              <li>открывается за {session.accessPolicy.opensBeforeStartMinutes} мин до начала</li>
-              <li>закрывается через {session.accessPolicy.closesAfterEndMinutes} мин после окончания</li>
+              <li>открывается за {session.accessPolicy.opensBeforeStartMinutes} минут до начала</li>
+              <li>закрывается через {session.accessPolicy.closesAfterEndMinutes} минут после окончания</li>
             </ul>
 
             {access ? (
@@ -142,9 +166,17 @@ export function VideoAccessPanel({ consultationId }: VideoAccessPanelProps) {
                 <p className="section-text">
                   Истекает в <strong>{formatCompactDateTime(access.expiresAt)}</strong>
                 </p>
-                <a className="muted-link" href={access.joinUrl} rel="noreferrer" target="_blank">
-                  {access.joinUrl}
-                </a>
+
+                {access.provider === "livekit" ? (
+                  <div className="stack compact-stack">
+                    <span className="section-text">Сервер LiveKit: {access.providerServerUrl ?? "не указан"}</span>
+                    <span className="section-text">Комната: {access.roomId}</span>
+                  </div>
+                ) : (
+                  <a className="muted-link" href={access.joinUrl} rel="noreferrer" target="_blank">
+                    {access.joinUrl}
+                  </a>
+                )}
               </div>
             ) : null}
           </div>

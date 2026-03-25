@@ -1,15 +1,29 @@
-import { randomUUID } from "node:crypto";
-import { Injectable, UnauthorizedException, ConflictException, ForbiddenException } from "@nestjs/common";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
+import {
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  UnauthorizedException,
+} from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
-import { ClientProfile, PsychologistApprovalStatus, Prisma, UserStatus } from "@prisma/client";
+import {
+  NotificationChannel,
+  Prisma,
+  PsychologistApprovalStatus,
+  UserStatus,
+} from "@prisma/client";
 import bcrypt from "bcryptjs";
 import type { Request, Response } from "express";
 import { AuditService } from "../audit/audit.service";
+import { NotificationsService } from "../notifications/notifications.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { LoginDto } from "./dto/login.dto";
 import { RegisterDto } from "./dto/register.dto";
+import { ResendEmailVerificationDto } from "./dto/resend-email-verification.dto";
+import { VerifyEmailDto } from "./dto/verify-email.dto";
 import { RefreshTokenPayload } from "./interfaces/refresh-token-payload.interface";
+import { SessionRevocationService } from "./session-revocation.service";
 
 type AuthIdentity = Prisma.UserGetPayload<{
   include: {
@@ -28,9 +42,11 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
     private readonly auditService: AuditService,
+    private readonly notificationsService: NotificationsService,
+    private readonly sessionRevocationService: SessionRevocationService,
   ) {}
 
-  async register(dto: RegisterDto, request: Request, response: Response) {
+  async register(dto: RegisterDto, request: Request) {
     const existing = await this.prisma.user.findUnique({
       where: { email: dto.email.toLowerCase() },
     });
@@ -54,7 +70,7 @@ export class AuthService {
         data: {
           email: dto.email.toLowerCase(),
           passwordHash: await bcrypt.hash(dto.password, 10),
-          status: UserStatus.active,
+          status: UserStatus.pending,
           consentRecords: {
             create: [
               {
@@ -138,7 +154,17 @@ export class AuthService {
       },
     });
 
-    return this.issueAuthSession(user, request, response);
+    const verification = await this.issueEmailVerification(user.id, user.email);
+
+    return {
+      success: true,
+      requiresEmailVerification: true,
+      email: user.email,
+      verificationExpiresAt: verification.expiresAt.toISOString(),
+      ...(verification.debugVerificationLink
+        ? { debugVerificationLink: verification.debugVerificationLink }
+        : {}),
+    };
   }
 
   async login(dto: LoginDto, request: Request, response: Response) {
@@ -157,6 +183,10 @@ export class AuthService {
 
     if (!user || !(await bcrypt.compare(dto.password, user.passwordHash))) {
       throw new UnauthorizedException("Неверные учётные данные");
+    }
+
+    if (!user.emailVerifiedAt || user.status === UserStatus.pending) {
+      throw new ForbiddenException("Подтвердите email перед входом в систему");
     }
 
     if (user.status !== UserStatus.active) {
@@ -182,6 +212,145 @@ export class AuthService {
     });
 
     return this.issueAuthSession(user, request, response);
+  }
+
+  async verifyEmail(dto: VerifyEmailDto, request: Request, response: Response) {
+    const verificationToken = await this.prisma.emailVerificationToken.findUnique({
+      where: {
+        tokenHash: this.hashEmailVerificationToken(dto.token),
+      },
+      include: {
+        user: {
+          include: {
+            roles: {
+              include: {
+                role: true,
+              },
+            },
+            clientProfile: true,
+            psychologistProfile: true,
+          },
+        },
+      },
+    });
+
+    if (
+      !verificationToken ||
+      verificationToken.usedAt ||
+      verificationToken.revokedAt ||
+      verificationToken.expiresAt < new Date()
+    ) {
+      throw new UnauthorizedException("Ссылка подтверждения недействительна или истекла");
+    }
+
+    if (
+      verificationToken.user.status === UserStatus.blocked ||
+      verificationToken.user.status === UserStatus.deleted
+    ) {
+      throw new ForbiddenException("Пользователь не может быть подтверждён");
+    }
+
+    const verifiedUser = await this.prisma.$transaction(async (tx) => {
+      const now = new Date();
+
+      await tx.emailVerificationToken.update({
+        where: { id: verificationToken.id },
+        data: {
+          usedAt: now,
+        },
+      });
+
+      await tx.emailVerificationToken.updateMany({
+        where: {
+          userId: verificationToken.userId,
+          id: {
+            not: verificationToken.id,
+          },
+          usedAt: null,
+          revokedAt: null,
+        },
+        data: {
+          revokedAt: now,
+        },
+      });
+
+      return tx.user.update({
+        where: {
+          id: verificationToken.userId,
+        },
+        data: {
+          emailVerifiedAt: verificationToken.user.emailVerifiedAt ?? now,
+          status:
+            verificationToken.user.status === UserStatus.pending
+              ? UserStatus.active
+              : verificationToken.user.status,
+        },
+        include: {
+          roles: {
+            include: {
+              role: true,
+            },
+          },
+          clientProfile: true,
+          psychologistProfile: true,
+        },
+      });
+    });
+
+    await this.auditService.log({
+      actorUserId: verifiedUser.id,
+      actorRole: this.roleCodes(verifiedUser)[0] ?? null,
+      action: "auth.verify_email",
+      entityType: "user",
+      entityId: verifiedUser.id,
+      requestId: (request as any).requestId ?? null,
+      ip: request.ip,
+      userAgent: request.headers["user-agent"] ?? null,
+    });
+
+    return this.issueAuthSession(verifiedUser, request, response);
+  }
+
+  async resendEmailVerification(dto: ResendEmailVerificationDto, request: Request) {
+    const user = await this.prisma.user.findUnique({
+      where: {
+        email: dto.email.toLowerCase(),
+      },
+      select: {
+        id: true,
+        email: true,
+        status: true,
+        emailVerifiedAt: true,
+      },
+    });
+
+    let debugVerificationLink: string | null = null;
+
+    if (user && !user.emailVerifiedAt && user.status !== UserStatus.deleted && user.status !== UserStatus.blocked) {
+      const verification = await this.issueEmailVerification(user.id, user.email);
+      debugVerificationLink = verification.debugVerificationLink;
+    }
+
+    await this.auditService.log({
+      actorUserId: user?.id ?? null,
+      actorRole: null,
+      action: "auth.resend_verification",
+      entityType: "user",
+      entityId: user?.id ?? dto.email.toLowerCase(),
+      requestId: (request as any).requestId ?? null,
+      ip: request.ip,
+      userAgent: request.headers["user-agent"] ?? null,
+      metadataJson: {
+        email: dto.email.toLowerCase(),
+        accountFound: Boolean(user),
+      },
+    });
+
+    return {
+      success: true,
+      message: "Если аккаунт существует и email ещё не подтверждён, мы отправили новое письмо.",
+      ...(debugVerificationLink ? { debugVerificationLink } : {}),
+    };
   }
 
   async refresh(request: Request, response: Response) {
@@ -221,6 +390,13 @@ export class AuthService {
       where: { id: session.id },
       data: { revokedAt: new Date() },
     });
+    await this.sessionRevocationService.revokeMany([
+      {
+        sessionId: session.id,
+        userId: session.user.id,
+        expiresAt: session.expiresAt,
+      },
+    ]);
 
     await this.auditService.log({
       actorUserId: session.user.id,
@@ -243,6 +419,16 @@ export class AuthService {
       const payload = await this.verifyRefreshToken(refreshToken).catch(() => null);
 
       if (payload) {
+        const currentSession = await this.prisma.refreshToken.findUnique({
+          where: { id: payload.sessionId },
+          select: {
+            id: true,
+            userId: true,
+            expiresAt: true,
+            revokedAt: true,
+          },
+        });
+
         await this.prisma.refreshToken.updateMany({
           where: {
             id: payload.sessionId,
@@ -253,6 +439,16 @@ export class AuthService {
             revokedAt: new Date(),
           },
         });
+
+        if (currentSession && !currentSession.revokedAt) {
+          await this.sessionRevocationService.revokeMany([
+            {
+              sessionId: currentSession.id,
+              userId: currentSession.userId,
+              expiresAt: currentSession.expiresAt,
+            },
+          ]);
+        }
       }
     }
 
@@ -261,6 +457,18 @@ export class AuthService {
   }
 
   async logoutAll(userId: string, request: Request, role: string | null) {
+    const activeSessions = await this.prisma.refreshToken.findMany({
+      where: {
+        userId,
+        revokedAt: null,
+      },
+      select: {
+        id: true,
+        userId: true,
+        expiresAt: true,
+      },
+    });
+
     await this.prisma.refreshToken.updateMany({
       where: {
         userId,
@@ -270,6 +478,13 @@ export class AuthService {
         revokedAt: new Date(),
       },
     });
+    await this.sessionRevocationService.revokeMany(
+      activeSessions.map((session) => ({
+        sessionId: session.id,
+        userId: session.userId,
+        expiresAt: session.expiresAt,
+      })),
+    );
 
     await this.auditService.log({
       actorUserId: userId,
@@ -342,6 +557,64 @@ export class AuthService {
     };
   }
 
+  private async issueEmailVerification(userId: string, email: string) {
+    const now = new Date();
+    await this.prisma.emailVerificationToken.updateMany({
+      where: {
+        userId,
+        usedAt: null,
+        revokedAt: null,
+        expiresAt: {
+          gt: now,
+        },
+      },
+      data: {
+        revokedAt: now,
+      },
+    });
+
+    const rawToken = this.generateEmailVerificationToken();
+    const expiresAt = new Date(Date.now() + this.getEmailVerificationTtlMs());
+    const tokenHash = this.hashEmailVerificationToken(rawToken);
+    const created = await this.prisma.emailVerificationToken.create({
+      data: {
+        userId,
+        tokenHash,
+        expiresAt,
+      },
+      select: {
+        id: true,
+      },
+    });
+    const verificationLink = this.buildEmailVerificationLink(rawToken);
+
+    await this.notificationsService.createQueuedNotifications([
+      {
+        userId,
+        channel: NotificationChannel.email,
+        type: "auth.email_verification",
+        title: "Подтвердите email",
+        body: [
+          "Для завершения регистрации подтвердите email по ссылке:",
+          verificationLink,
+          "",
+          `Ссылка действует до ${expiresAt.toISOString()}.`,
+        ].join("\n"),
+        dedupKey: `auth.email_verification:${created.id}`,
+        payloadJson: {
+          verificationLink,
+          expiresAt: expiresAt.toISOString(),
+          recipientEmail: email,
+        },
+      },
+    ]);
+
+    return {
+      expiresAt,
+      debugVerificationLink: this.isEmailVerificationDebugEnabled() ? verificationLink : null,
+    };
+  }
+
   private async verifyRefreshToken(token: string) {
     const payload = await this.jwtService.verifyAsync<RefreshTokenPayload>(token, {
       secret: this.configService.getOrThrow<string>("JWT_REFRESH_SECRET"),
@@ -358,7 +631,7 @@ export class AuthService {
     response.cookie(this.refreshCookieName, token, {
       httpOnly: true,
       secure: this.configService.get<string>("NODE_ENV", "development") === "production",
-      sameSite: "lax",
+      sameSite: "strict",
       maxAge: refreshTtlDays * 24 * 60 * 60 * 1000,
       path: "/api/v1/auth",
       ...(this.cookieDomainOption() ? { domain: this.cookieDomainOption() } : {}),
@@ -369,7 +642,7 @@ export class AuthService {
     response.clearCookie(this.refreshCookieName, {
       httpOnly: true,
       secure: this.configService.get<string>("NODE_ENV", "development") === "production",
-      sameSite: "lax",
+      sameSite: "strict",
       path: "/api/v1/auth",
       ...(this.cookieDomainOption() ? { domain: this.cookieDomainOption() } : {}),
     });
@@ -392,11 +665,35 @@ export class AuthService {
   }
 
   private hash(value: string | null | undefined) {
-    return value ? require("node:crypto").createHash("sha256").update(value).digest("hex") : null;
+    return value ? createHash("sha256").update(value).digest("hex") : null;
   }
 
   private cookieDomainOption() {
     const domain = this.configService.get<string>("COOKIE_DOMAIN", "");
     return domain && domain !== "localhost" ? domain : undefined;
+  }
+
+  private generateEmailVerificationToken() {
+    return randomBytes(32).toString("base64url");
+  }
+
+  private hashEmailVerificationToken(token: string) {
+    return createHash("sha256").update(token).digest("hex");
+  }
+
+  private getEmailVerificationTtlMs() {
+    const ttlHours = this.configService.get<number>("EMAIL_VERIFICATION_TTL_HOURS", 24);
+    return ttlHours * 60 * 60 * 1000;
+  }
+
+  private buildEmailVerificationLink(token: string) {
+    const webOrigin = this.configService.get<string>("WEB_APP_ORIGIN", "http://localhost:3000");
+    const url = new URL("/auth/verify-email", webOrigin);
+    url.searchParams.set("token", token);
+    return url.toString();
+  }
+
+  private isEmailVerificationDebugEnabled() {
+    return this.configService.get<string>("AUTH_DEBUG_EMAIL_VERIFICATION_LINKS", "false") === "true";
   }
 }

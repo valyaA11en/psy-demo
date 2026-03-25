@@ -51,6 +51,46 @@ export type PublicPsychologist = {
   upcomingSlots: SlotPreview[];
 };
 
+export type PsychologistWorkspaceProfile = {
+  userId: string;
+  publicSlug: string;
+  firstName: string;
+  lastName: string;
+  publicTitle: string | null;
+  bio: string | null;
+  experienceYears: number;
+  priceFrom: number | null;
+  priceTo: number | null;
+  languages: string[];
+  formats: string[];
+  approvalStatus: string;
+  ratingAvg: number;
+  reviewsCount: number;
+  specializations: Specialization[];
+};
+
+export type PublicReview = {
+  id: string;
+  consultationId: string | null;
+  rating: number;
+  text: string | null;
+  status: string;
+  createdAt: string;
+  authorName: string;
+};
+
+export type PublicReviewListResponse = {
+  psychologist: {
+    id: string;
+    slug: string;
+    fullName: string;
+    ratingAvg: number;
+    reviewsCount: number;
+  };
+  items: PublicReview[];
+  pagination: Pagination;
+};
+
 export type CatalogResponse = {
   items: PublicPsychologist[];
   pagination: Pagination;
@@ -79,6 +119,69 @@ export type AvailabilitySlot = {
   updatedAt: string;
 };
 
+export type AvailabilityRule = {
+  id: string;
+  weekday: string;
+  startTime: string;
+  endTime: string;
+  slotDurationMin: number;
+  bufferMin: number;
+  timezone: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AvailabilityException = {
+  id: string;
+  startsAt: string;
+  endsAt: string;
+  reason: string | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type PrivateFileRecord = {
+  id: string;
+  purpose: string;
+  originalFilename: string | null;
+  mimeType: string;
+  sizeBytes: number;
+  status: string;
+  visibility: string;
+  createdAt: string;
+  uploadedAt: string | null;
+  deletedAt: string | null;
+  canDownload: boolean;
+};
+
+export type FilesListResponse = {
+  items: PrivateFileRecord[];
+  pagination: Pagination;
+  filters: {
+    purpose: string | null;
+    status: string | null;
+  };
+};
+
+export type FileUploadSession = {
+  file: PrivateFileRecord;
+  upload: {
+    method: "PUT";
+    url: string;
+    headers: Record<string, string>;
+    expiresAt: string;
+    expiresInSec: number;
+  };
+};
+
+export type FileDownloadSession = {
+  url: string;
+  expiresAt: string;
+  expiresInSec: number;
+};
+
 export type PublicSlotsResponse = {
   psychologist: {
     id: string;
@@ -90,6 +193,17 @@ export type PublicSlotsResponse = {
     dateFrom: string | null;
     dateTo: string | null;
     timezone: string;
+    limit: number;
+  };
+};
+
+export type MyAvailabilitySlotsResponse = {
+  items: AvailabilitySlot[];
+  filters: {
+    dateFrom: string | null;
+    dateTo: string | null;
+    timezone: string;
+    status: string | null;
     limit: number;
   };
 };
@@ -117,6 +231,20 @@ export type AuthSessionPayload = {
   user: AuthUser;
 };
 
+export type RegisterResult = {
+  success: true;
+  requiresEmailVerification: true;
+  email: string;
+  verificationExpiresAt: string;
+  debugVerificationLink?: string;
+};
+
+export type ResendVerificationResult = {
+  success: true;
+  message: string;
+  debugVerificationLink?: string;
+};
+
 export type LatestPayment = {
   id: string;
   provider: string;
@@ -125,6 +253,16 @@ export type LatestPayment = {
   status: string;
   paidAt: string | null;
   createdAt: string;
+};
+
+export type BookingReview = {
+  id: string;
+  consultationId: string | null;
+  rating: number;
+  text: string | null;
+  status: string;
+  createdAt: string;
+  authorName?: string | null;
 };
 
 export type DashboardBooking = {
@@ -155,6 +293,8 @@ export type DashboardBooking = {
     timezone: string | null;
   };
   latestPayment: LatestPayment | null;
+  review: BookingReview | null;
+  canLeaveReview: boolean;
   statusHistory?: Array<{
     id: string;
     fromStatus: string | null;
@@ -228,6 +368,89 @@ export type PaymentListResponse = {
   };
 };
 
+export type NotificationRecord = {
+  id: string;
+  channel: string;
+  type: string;
+  title: string;
+  body: string;
+  payload?: Record<string, unknown> | null;
+  status: string;
+  attempts: number;
+  queuedAt: string;
+  sentAt: string | null;
+  failedAt: string | null;
+  readAt: string | null;
+  lastErrorCode: string | null;
+  lastErrorMessage: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type NotificationPreferences = {
+  userId: string;
+  inAppEnabled: boolean;
+  emailEnabled: boolean;
+  telegramEnabled: boolean;
+  bookingUpdatesEnabled: boolean;
+  paymentUpdatesEnabled: boolean;
+  sessionUpdatesEnabled: boolean;
+  systemUpdatesEnabled: boolean;
+  telegramLinked: boolean;
+  telegramChatIdMasked: string | null;
+  telegramLinkedAt: string | null;
+  telegramBotUsername: string | null;
+  telegramLinkingAvailable: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type TelegramLinkSession = {
+  botUsername: string;
+  deepLink: string;
+  tokenExpiresAt: string;
+  expiresInSec: number;
+};
+
+export type NotificationListResponse = {
+  items: NotificationRecord[];
+  pagination: Pagination;
+  filters: {
+    status: string | null;
+    unreadOnly: boolean;
+  };
+  unreadCount: number;
+};
+
+export type ComplaintRecord = {
+  id: string;
+  consultationId: string | null;
+  type: string;
+  text: string;
+  status: string;
+  resolutionNote: string | null;
+  createdAt: string;
+  authorUserId: string;
+  target: {
+    userId: string;
+    displayName: string | null;
+    publicTitle: string | null;
+  } | null;
+  consultation: {
+    id: string;
+    scheduledAt: string;
+    status: string;
+  } | null;
+};
+
+export type ComplaintListResponse = {
+  items: ComplaintRecord[];
+  pagination: Pagination;
+  filters: {
+    status: string | null;
+  };
+};
+
 export type SessionInfo = {
   consultationId: string;
   participantRole: "client" | "psychologist";
@@ -239,6 +462,9 @@ export type SessionInfo = {
   endsAt: string;
   paymentStatus: string;
   joinUrl: string | null;
+  providerConnection: {
+    serverUrl: string | null;
+  };
   accessWindow: {
     opensAt: string;
     closesAt: string;
@@ -261,6 +487,7 @@ export type VideoAccessPayload = {
   issuedAt: string;
   expiresAt: string;
   expiresInSec: number;
+  providerServerUrl: string | null;
   joinUrl: string;
 };
 

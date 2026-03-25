@@ -24,9 +24,20 @@ class AdminAuditLogger
             'entity_id' => $entityId,
             'ip_hash' => $this->hash($request?->ip()),
             'user_agent_hash' => $this->hash($request?->userAgent()),
-            'request_id' => $request?->header('x-request-id'),
+            'request_id' => $this->resolveRequestId($request),
             'metadata_json' => $metadata,
         ]);
+    }
+
+    private function resolveRequestId(?Request $request): ?string
+    {
+        if (! $request) {
+            return null;
+        }
+
+        $requestId = $request->attributes->get('requestId');
+
+        return is_string($requestId) && $requestId !== '' ? $requestId : null;
     }
 
     private function hash(?string $value): ?string

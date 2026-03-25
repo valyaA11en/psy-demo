@@ -7,6 +7,8 @@ use App\Models\Complaint;
 use App\Models\Consultation;
 use App\Models\Payment;
 use App\Models\PsychologistProfile;
+use App\Models\Review;
+use App\Models\Specialization;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\View\View;
@@ -30,6 +32,12 @@ class DashboardController extends Controller
                     ->count(),
                 'pendingPayments' => Payment::query()
                     ->where('status', 'pending')
+                    ->count(),
+                'activeSpecializations' => Specialization::query()
+                    ->where('is_active', true)
+                    ->count(),
+                'flaggedReviews' => Review::query()
+                    ->whereIn('status', ['flagged', 'hidden'])
                     ->count(),
                 'consultationsToday' => Consultation::query()
                     ->whereBetween('scheduled_at', [$today->startOfDay(), $today->endOfDay()])

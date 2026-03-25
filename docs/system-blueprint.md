@@ -242,6 +242,7 @@ docker compose run --rm admin-panel php artisan route:list
 - `specializations`: справочник специализаций; индексы `slug unique`, `is_active`
 - `psychologist_specializations`: связка психологов и специализаций; composite unique
 - `availability_rules`: недельные правила доступности; индексы `psychologist_profile_id`, `weekday`, `is_active`
+- `availability_exceptions`: blackout/exceptions для недоступных периодов; индексы `psychologist_profile_id`, `is_active`, `starts_at`
 - `appointment_slots`: конкретные окна записи; индексы `(psychologist_profile_id, starts_at)`, `status`, `locked_until`
 - `consultations`: запись на консультацию; чувствительные поля `client_message`, meeting access data; индексы `(client_user_id, scheduled_at)`, `(psychologist_user_id, scheduled_at)`, `status`
 - `consultation_status_history`: история статусов; индексы `consultation_id`, `created_at`

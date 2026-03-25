@@ -9,9 +9,11 @@ import { humanizeCode } from "@/lib/format";
 type Mode = "login" | "register";
 type AccountType = "client" | "psychologist";
 
+const showDemoCredentials = process.env.NEXT_PUBLIC_SHOW_DEMO_CREDENTIALS === "true";
+
 export function AuthPanel() {
   const router = useRouter();
-  const { login, register, ready, user } = useAuth();
+  const { login, register, resendVerification, ready, user } = useAuth();
   const [mode, setMode] = useState<Mode>("login");
   const [accountType, setAccountType] = useState<AccountType>("client");
   const [email, setEmail] = useState("");
@@ -22,11 +24,13 @@ export function AuthPanel() {
   const [publicTitle, setPublicTitle] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [verificationLink, setVerificationLink] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
   function handleSubmit() {
     setError(null);
     setSuccess(null);
+    setVerificationLink(null);
     setPending(true);
 
     startTransition(() => {
@@ -44,10 +48,18 @@ export function AuthPanel() {
             });
 
       void action
-        .then(() => {
-          setSuccess(mode === "login" ? "Сессия начата" : "Аккаунт создан");
-          router.push("/dashboard");
-          router.refresh();
+        .then((result) => {
+          if (mode === "login") {
+            setSuccess("Сессия начата");
+            router.push("/dashboard");
+            router.refresh();
+            return;
+          }
+
+          setSuccess("Аккаунт создан. Подтвердите email по ссылке из письма, чтобы войти.");
+          if ("debugVerificationLink" in result && result.debugVerificationLink) {
+            setVerificationLink(result.debugVerificationLink);
+          }
         })
         .catch((nextError: Error) => {
           setError(nextError.message);
@@ -56,6 +68,29 @@ export function AuthPanel() {
           setPending(false);
         });
     });
+  }
+
+  function handleResendVerification() {
+    if (!email) {
+      setError("Укажите email, на который нужно отправить письмо");
+      return;
+    }
+
+    setError(null);
+    setSuccess(null);
+    setPending(true);
+
+    void resendVerification(email)
+      .then((result) => {
+        setSuccess(result.message);
+        setVerificationLink(result.debugVerificationLink ?? null);
+      })
+      .catch((nextError: Error) => {
+        setError(nextError.message);
+      })
+      .finally(() => {
+        setPending(false);
+      });
   }
 
   if (ready && user) {
@@ -191,17 +226,38 @@ export function AuthPanel() {
           </Link>
         </div>
 
+        {mode === "register" ? (
+          <div className="inline-actions">
+            <button
+              className="button button-secondary"
+              disabled={pending}
+              onClick={handleResendVerification}
+              type="button"
+            >
+              отправить письмо повторно
+            </button>
+          </div>
+        ) : null}
+
         {error ? <div className="notice notice-error">{error}</div> : null}
         {success ? <div className="notice notice-success">{success}</div> : null}
+        {verificationLink ? (
+          <div className="surface surface-muted">
+            <p className="caption">Debug verification link</p>
+            <Link href={verificationLink}>{verificationLink}</Link>
+          </div>
+        ) : null}
 
-        <div className="surface surface-muted">
-          <p className="caption">Демо-аккаунты</p>
-          <ul className="list-block">
-            <li>`client@example.com / Client12345!`</li>
-            <li>`psychologist@example.com / Psychologist123!`</li>
-            <li>`admin@example.com / Admin12345!`</li>
-          </ul>
-        </div>
+        {showDemoCredentials ? (
+          <div className="surface surface-muted">
+            <p className="caption">Локальные demo-аккаунты</p>
+            <ul className="list-block">
+              <li>`client@example.com / Client12345!`</li>
+              <li>`psychologist@example.com / Psychologist123!`</li>
+              <li>`admin@example.com / Admin12345!`</li>
+            </ul>
+          </div>
+        ) : null}
       </div>
     </section>
   );

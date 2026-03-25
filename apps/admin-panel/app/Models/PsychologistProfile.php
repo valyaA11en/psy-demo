@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class PsychologistProfile extends Model
 {
@@ -49,5 +50,10 @@ class PsychologistProfile extends Model
             'user_id',
             'id',
         );
+    }
+
+    public function files(): HasMany
+    {
+        return $this->hasMany(File::class, 'psychologist_profile_id', 'user_id');
     }
 }

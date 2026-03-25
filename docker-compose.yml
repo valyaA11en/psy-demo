@@ -1,5 +1,4 @@
 # Compose stack for the current demo platform.
-# Go workers remain scaffold placeholders; web, api, ws, and admin are runnable.
 
 services:
   nginx:
@@ -9,6 +8,8 @@ services:
       - api-core
       - ws-gateway
       - admin-panel
+      - telegram-link-webhook
+      - minio
     ports:
       - "${NGINX_HTTP_PORT:-80}:80"
       - "${NGINX_HTTPS_PORT:-443}:443"
@@ -17,6 +18,7 @@ services:
     networks:
       - edge
       - app
+      - data
 
   web-app:
     build:
@@ -26,6 +28,7 @@ services:
       PORT: 3000
       NEXT_PUBLIC_API_BASE_URL: http://localhost/api/v1
       NEXT_PUBLIC_WS_URL: http://localhost
+      NEXT_PUBLIC_SHOW_DEMO_CREDENTIALS: ${NEXT_PUBLIC_SHOW_DEMO_CREDENTIALS:-false}
       API_INTERNAL_BASE_URL: http://api-core:4000/api/v1
     depends_on:
       - api-core
@@ -40,6 +43,16 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       REDIS_URL: redis://redis:6379
+      S3_INTERNAL_ENDPOINT: ${S3_INTERNAL_ENDPOINT:-http://minio:9000}
+      S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_ENDPOINT:-http://localhost/s3}
+      S3_REGION: ${S3_REGION:-us-east-1}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-minioadmin}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-change_me}
+      S3_FORCE_PATH_STYLE: ${S3_FORCE_PATH_STYLE:-true}
+      S3_BUCKET_PRIVATE: ${S3_BUCKET_PRIVATE}
+      S3_BUCKET_PUBLIC: ${S3_BUCKET_PUBLIC}
+      S3_PRESIGNED_UPLOAD_TTL_SEC: ${S3_PRESIGNED_UPLOAD_TTL_SEC:-900}
+      S3_PRESIGNED_DOWNLOAD_TTL_SEC: ${S3_PRESIGNED_DOWNLOAD_TTL_SEC:-300}
       PORT: 4000
       WEB_APP_ORIGIN: http://localhost:${WEB_APP_PORT:-3000}
       WEB_APP_ORIGINS: http://localhost:${WEB_APP_PORT:-3000},http://localhost
@@ -47,10 +60,31 @@ services:
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
       VIDEO_ACCESS_SECRET: ${VIDEO_ACCESS_SECRET}
-      SWAGGER_ENABLED: "true"
+      VIDEO_PROVIDER: ${VIDEO_PROVIDER:-mock_video}
+      LIVEKIT_WS_URL: ${LIVEKIT_WS_URL}
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET}
+      LIVEKIT_ROOM_PREFIX: ${LIVEKIT_ROOM_PREFIX:-consultation}
+      TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME}
+      TELEGRAM_LINK_TOKEN_TTL_MIN: ${TELEGRAM_LINK_TOKEN_TTL_MIN}
+      WEBHOOK_SIGNING_SECRET: ${WEBHOOK_SIGNING_SECRET}
+      AUTH_THROTTLE_TTL: ${AUTH_THROTTLE_TTL:-60}
+      AUTH_THROTTLE_LIMIT: ${AUTH_THROTTLE_LIMIT:-5}
+      EMAIL_VERIFICATION_TTL_HOURS: ${EMAIL_VERIFICATION_TTL_HOURS:-24}
+      AUTH_DEBUG_EMAIL_VERIFICATION_LINKS: ${AUTH_DEBUG_EMAIL_VERIFICATION_LINKS:-false}
+      WEBHOOK_THROTTLE_TTL: ${WEBHOOK_THROTTLE_TTL:-60}
+      WEBHOOK_THROTTLE_LIMIT: ${WEBHOOK_THROTTLE_LIMIT:-15}
+      SESSION_REVOCATION_CHANNEL: ${SESSION_REVOCATION_CHANNEL:-consultations.session-revoked.v1}
+      SESSION_REVOCATION_KEY_PREFIX: ${SESSION_REVOCATION_KEY_PREFIX:-consultations:session-revoked:v1:}
+      BOOKING_SLOT_QUEUE_KEY: ${BOOKING_SLOT_QUEUE_KEY}
+      NOTIFICATION_QUEUE_KEY: ${NOTIFICATION_QUEUE_KEY}
+      SWAGGER_ENABLED: ${SWAGGER_ENABLED:-false}
+      SEED_DEMO_DATA: ${SEED_DEMO_DATA:-false}
     depends_on:
       - postgres
       - redis
+      - minio
+      - minio-init
     networks:
       - app
       - data
@@ -65,6 +99,8 @@ services:
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
       REDIS_URL: redis://redis:6379
       REALTIME_REDIS_CHANNEL: consultations.realtime.v1
+      SESSION_REVOCATION_CHANNEL: ${SESSION_REVOCATION_CHANNEL:-consultations.session-revoked.v1}
+      SESSION_REVOCATION_KEY_PREFIX: ${SESSION_REVOCATION_KEY_PREFIX:-consultations:session-revoked:v1:}
       WS_PATH: /ws/socket.io
     depends_on:
       - redis
@@ -88,9 +124,12 @@ services:
       DB_USERNAME: ${POSTGRES_USER}
       DB_PASSWORD: ${POSTGRES_PASSWORD}
       SESSION_DRIVER: file
-      SESSION_SECURE_COOKIE: "false"
+      SESSION_SECURE_COOKIE: ${ADMIN_SESSION_SECURE_COOKIE:-false}
       CACHE_STORE: file
       QUEUE_CONNECTION: sync
+      SHOW_DEMO_CREDENTIALS: ${SHOW_DEMO_CREDENTIALS:-false}
+      ADMIN_ALLOWED_IPS: ${ADMIN_ALLOWED_IPS:-127.0.0.1,::1}
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-127.0.0.1,::1,172.16.0.0/12}
     depends_on:
       - postgres
       - redis
@@ -99,11 +138,19 @@ services:
       - data
 
   booking-slot-worker:
-    image: golang:1.24-alpine
-    command: ["sh", "-c", "echo scaffold booking-slot-worker && sleep infinity"]
-    working_dir: /app
-    volumes:
-      - ./services/booking-slot-worker:/app
+    build:
+      context: ./services/booking-slot-worker
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
+      REDIS_URL: redis://redis:6379
+      BOOKING_SLOT_QUEUE_KEY: ${BOOKING_SLOT_QUEUE_KEY}
+      BOOKING_SLOT_WORKER_CONCURRENCY: ${BOOKING_SLOT_WORKER_CONCURRENCY}
+      BOOKING_SLOT_SWEEP_INTERVAL_SEC: ${BOOKING_SLOT_SWEEP_INTERVAL_SEC}
+      BOOKING_SLOT_SWEEP_BATCH_SIZE: ${BOOKING_SLOT_SWEEP_BATCH_SIZE}
+      BOOKING_SLOT_POP_TIMEOUT_SEC: ${BOOKING_SLOT_POP_TIMEOUT_SEC}
+      BOOKING_SLOT_LOOKAHEAD_DAYS: ${BOOKING_SLOT_LOOKAHEAD_DAYS}
+      BOOKING_SLOT_CLEANUP_BATCH_SIZE: ${BOOKING_SLOT_CLEANUP_BATCH_SIZE}
     depends_on:
       - postgres
       - redis
@@ -112,17 +159,49 @@ services:
       - data
 
   notification-worker:
-    image: golang:1.24-alpine
-    command: ["sh", "-c", "echo scaffold notification-worker && sleep infinity"]
-    working_dir: /app
-    volumes:
-      - ./services/notification-worker:/app
+    build:
+      context: ./services/notification-worker
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
+      REDIS_URL: redis://redis:6379
+      NOTIFICATION_QUEUE_KEY: ${NOTIFICATION_QUEUE_KEY}
+      NOTIFICATION_WORKER_CONCURRENCY: ${NOTIFICATION_WORKER_CONCURRENCY}
+      NOTIFICATION_SWEEP_INTERVAL_SEC: ${NOTIFICATION_SWEEP_INTERVAL_SEC}
+      NOTIFICATION_SWEEP_BATCH_SIZE: ${NOTIFICATION_SWEEP_BATCH_SIZE}
+      NOTIFICATION_POP_TIMEOUT_SEC: ${NOTIFICATION_POP_TIMEOUT_SEC}
+      NOTIFICATION_RETRY_BASE_SEC: ${NOTIFICATION_RETRY_BASE_SEC}
+      NOTIFICATION_RETRY_MAX_SEC: ${NOTIFICATION_RETRY_MAX_SEC}
+      NOTIFICATION_PROCESSING_TIMEOUT_SEC: ${NOTIFICATION_PROCESSING_TIMEOUT_SEC}
+      EMAIL_PROVIDER: ${EMAIL_PROVIDER}
+      EMAIL_FROM: ${EMAIL_FROM}
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_USERNAME: ${SMTP_USERNAME}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      TELEGRAM_PROVIDER: ${TELEGRAM_PROVIDER}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-local-dev-bot-token}
     depends_on:
       - postgres
       - redis
     networks:
       - app
       - data
+
+  telegram-link-webhook:
+    build:
+      context: ./services/telegram-link-webhook
+      dockerfile: Dockerfile
+    environment:
+      PORT: 4010
+      API_CORE_INTERNAL_BASE_URL: http://api-core:4000/api/v1
+      WEBHOOK_SIGNING_SECRET: ${WEBHOOK_SIGNING_SECRET}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-local-dev-bot-token}
+      TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET}
+    depends_on:
+      - api-core
+    networks:
+      - app
 
   postgres:
     image: postgres:17-alpine
@@ -144,16 +223,28 @@ services:
       - data
 
   minio:
-    image: minio/minio:RELEASE.2026-01-03T00-00-00Z
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
     command: ["server", "/data", "--console-address", ":9001"]
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
     volumes:
       - minio_data:/data
-    ports:
-      - "${MINIO_API_PORT:-9000}:9000"
-      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    networks:
+      - data
+
+  minio-init:
+    image: minio/mc:RELEASE.2025-08-13T08-35-41Z
+    depends_on:
+      - minio
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      S3_BUCKET_PRIVATE: ${S3_BUCKET_PRIVATE}
+      S3_BUCKET_PUBLIC: ${S3_BUCKET_PUBLIC}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - 'until mc alias set local http://minio:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD"; do sleep 1; done; mc mb --ignore-existing local/$S3_BUCKET_PRIVATE; mc mb --ignore-existing local/$S3_BUCKET_PUBLIC'
     networks:
       - data
 

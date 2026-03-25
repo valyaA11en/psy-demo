@@ -9,6 +9,7 @@ import {
   UseGuards,
 } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
+import { Throttle } from "@nestjs/throttler";
 import type { Request, Response } from "express";
 import { CurrentUser } from "../common/decorators/current-user.decorator";
 import { JwtAuthGuard } from "../common/guards/jwt-auth.guard";
@@ -16,21 +17,45 @@ import { JwtUser } from "./interfaces/jwt-user.interface";
 import { AuthService } from "./auth.service";
 import { LoginDto } from "./dto/login.dto";
 import { RegisterDto } from "./dto/register.dto";
+import { ResendEmailVerificationDto } from "./dto/resend-email-verification.dto";
+import { VerifyEmailDto } from "./dto/verify-email.dto";
 
 @ApiTags("auth")
 @Controller("auth")
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
+  @Throttle({ auth: {} })
   @Post("register")
   async register(
     @Body() dto: RegisterDto,
     @Req() request: Request,
-    @Res({ passthrough: true }) response: Response,
   ) {
-    return this.authService.register(dto, request, response);
+    return this.authService.register(dto, request);
   }
 
+  @Throttle({ auth: {} })
+  @HttpCode(HttpStatus.OK)
+  @Post("verify-email")
+  async verifyEmail(
+    @Body() dto: VerifyEmailDto,
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    return this.authService.verifyEmail(dto, request, response);
+  }
+
+  @Throttle({ auth: {} })
+  @HttpCode(HttpStatus.OK)
+  @Post("resend-verification")
+  async resendVerification(
+    @Body() dto: ResendEmailVerificationDto,
+    @Req() request: Request,
+  ) {
+    return this.authService.resendEmailVerification(dto, request);
+  }
+
+  @Throttle({ auth: {} })
   @HttpCode(HttpStatus.OK)
   @Post("login")
   async login(
@@ -41,6 +66,7 @@ export class AuthController {
     return this.authService.login(dto, request, response);
   }
 
+  @Throttle({ auth: {} })
   @HttpCode(HttpStatus.OK)
   @Post("refresh")
   async refresh(
