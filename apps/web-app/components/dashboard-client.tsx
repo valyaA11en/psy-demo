@@ -10,6 +10,7 @@ import { BookingReviewPanel } from "@/components/booking-review-panel";
 import { NotificationPreferencesPanel } from "@/components/notification-preferences-panel";
 import { AppointmentSlotsPanel } from "@/components/appointment-slots-panel";
 import { PsychologistFilesPanel } from "@/components/psychologist-files-panel";
+import { PsychologistProfilePanel } from "@/components/psychologist-profile-panel";
 import { useAuth } from "@/components/auth-provider";
 import { PaymentActions } from "@/components/payment-actions";
 import { formatCompactDateTime, formatDateRange, formatMoney, humanizeCode } from "@/lib/format";
@@ -31,8 +32,10 @@ import type {
   NotificationRecord,
   PaymentListResponse,
   PaymentRecord,
+  PsychologistWorkspaceProfile,
   PrivateFileRecord,
   RealtimeDomainEvent,
+  Specialization,
   TelegramLinkSession,
 } from "@/lib/types";
 
@@ -110,6 +113,8 @@ export function DashboardClient() {
   );
   const [availabilityExceptions, setAvailabilityExceptions] = useState<AvailabilityException[]>([]);
   const [files, setFiles] = useState<PrivateFileRecord[]>([]);
+  const [psychologistWorkspaceProfile, setPsychologistWorkspaceProfile] = useState<PsychologistWorkspaceProfile | null>(null);
+  const [specializationsCatalog, setSpecializationsCatalog] = useState<Specialization[]>([]);
   const [notificationPreferences, setNotificationPreferences] = useState<NotificationPreferences | null>(null);
   const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
   const [complaints, setComplaints] = useState<ComplaintRecord[]>([]);
@@ -147,6 +152,8 @@ export function DashboardClient() {
         setAvailabilitySlots([]);
         setAvailabilityExceptions([]);
         setFiles([]);
+        setPsychologistWorkspaceProfile(null);
+        setSpecializationsCatalog([]);
         setNotificationPreferences(preferenceData);
         setNotifications(notificationData.items);
         setUnreadNotifications(notificationData.unreadCount);
@@ -156,7 +163,7 @@ export function DashboardClient() {
 
       if (user.roles.includes("psychologist")) {
         const slotQuery = buildAvailabilitySlotsQuery(availabilitySlotFilters);
-        const [bookingData, notificationData, exceptionData, ruleData, slotData, preferenceData, complaintData, fileData] =
+        const [bookingData, notificationData, exceptionData, ruleData, slotData, preferenceData, complaintData, fileData, psychologistProfileData, specializationsData] =
           await Promise.all([
           request<BookingListResponse>("/bookings/psychologist/me"),
           request<NotificationListResponse>("/notifications/me?limit=6"),
@@ -166,6 +173,8 @@ export function DashboardClient() {
           request<NotificationPreferences>("/notifications/me/preferences"),
           request<ComplaintListResponse>("/complaints/me?limit=6"),
           request<FilesListResponse>("/files/me?limit=12"),
+          request<PsychologistWorkspaceProfile>("/psychologists/me"),
+          request<Specialization[]>("/catalog/specializations", undefined, { auth: false }),
         ]);
         setBookings(bookingData.items);
         setPayments([]);
@@ -173,6 +182,8 @@ export function DashboardClient() {
         setAvailabilitySlots(slotData.items);
         setAvailabilityExceptions(exceptionData);
         setFiles(fileData.items);
+        setPsychologistWorkspaceProfile(psychologistProfileData);
+        setSpecializationsCatalog(specializationsData);
         setNotificationPreferences(preferenceData);
         setNotifications(notificationData.items);
         setUnreadNotifications(notificationData.unreadCount);
@@ -186,6 +197,8 @@ export function DashboardClient() {
       setAvailabilitySlots([]);
       setAvailabilityExceptions([]);
       setFiles([]);
+      setPsychologistWorkspaceProfile(null);
+      setSpecializationsCatalog([]);
       setComplaints([]);
       const [notificationData, preferenceData] = await Promise.all([
         request<NotificationListResponse>("/notifications/me?limit=6"),
@@ -402,6 +415,45 @@ export function DashboardClient() {
     await loadData();
   }
 
+  async function savePsychologistProfile(input: {
+    publicSlug: string;
+    firstName: string;
+    lastName: string;
+    publicTitle: string;
+    bio: string;
+    experienceYears: number;
+    priceFrom: number;
+    priceTo: number;
+    languages: string[];
+    formats: string[];
+    specializationIds: string[];
+  }) {
+    await request<PsychologistWorkspaceProfile>("/psychologists/me", {
+      method: "PATCH",
+      body: JSON.stringify({
+        publicSlug: input.publicSlug,
+        firstName: input.firstName,
+        lastName: input.lastName,
+        publicTitle: input.publicTitle,
+        bio: input.bio,
+        experienceYears: input.experienceYears,
+        priceFrom: input.priceFrom,
+        priceTo: input.priceTo,
+        languages: input.languages,
+        formats: input.formats,
+      }),
+    });
+
+    await request<PsychologistWorkspaceProfile>("/psychologists/me/specializations", {
+      method: "PUT",
+      body: JSON.stringify({
+        specializationIds: input.specializationIds,
+      }),
+    });
+
+    await loadData();
+  }
+
   useEffect(() => {
     if (!ready || !user) {
       return;
@@ -528,6 +580,11 @@ export function DashboardClient() {
           <div className="stack">
             {user.roles.includes("psychologist") ? (
               <>
+                <PsychologistProfilePanel
+                  onSave={savePsychologistProfile}
+                  profile={psychologistWorkspaceProfile}
+                  specializations={specializationsCatalog}
+                />
                 <AvailabilityRulesPanel
                   onCreate={createAvailabilityRule}
                   onDelete={deleteAvailabilityRule}

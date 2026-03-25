@@ -51,6 +51,24 @@ export type PublicPsychologist = {
   upcomingSlots: SlotPreview[];
 };
 
+export type PsychologistWorkspaceProfile = {
+  userId: string;
+  publicSlug: string;
+  firstName: string;
+  lastName: string;
+  publicTitle: string | null;
+  bio: string | null;
+  experienceYears: number;
+  priceFrom: number | null;
+  priceTo: number | null;
+  languages: string[];
+  formats: string[];
+  approvalStatus: string;
+  ratingAvg: number;
+  reviewsCount: number;
+  specializations: Specialization[];
+};
+
 export type PublicReview = {
   id: string;
   consultationId: string | null;

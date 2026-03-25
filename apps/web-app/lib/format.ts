@@ -97,6 +97,8 @@ export function humanizeCode(value: string | null | undefined) {
     published: "опубликован",
     hidden: "скрыт",
     online: "онлайн",
+    chat: "чат",
+    phone: "телефон",
     offline: "офлайн",
     idle: "ожидание",
     connecting: "подключение",
