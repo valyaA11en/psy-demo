@@ -2,10 +2,10 @@
   "name": "consultations-api-core",
   "version": "0.1.0",
   "description": "Основной NestJS API для аутентификации, каталога, бронирований, оплат, файлов, consent и аудита.",
-  "main": "dist/main.js",
+  "main": "dist/src/main.js",
   "scripts": {
     "build": "prisma generate && nest build",
-    "start": "node dist/main",
+    "start": "node dist/src/main.js",
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
     "lint": "node -e \"console.log('Конфигурация lint будет добавлена на следующем проходе по реализации')\"",

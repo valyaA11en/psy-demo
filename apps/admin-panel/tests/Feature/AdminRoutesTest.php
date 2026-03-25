@@ -56,4 +56,25 @@ class AdminRoutesTest extends TestCase
         $response->assertOk();
         $this->assertNotSame('spoofed-request-id', $response->headers->get('X-Request-Id'));
     }
+
+    public function test_admin_specializations_index_redirects_guest_to_login(): void
+    {
+        $response = $this->get('/admin/specializations');
+
+        $response->assertRedirect(route('login'));
+    }
+
+    public function test_admin_reviews_index_redirects_guest_to_login(): void
+    {
+        $response = $this->get('/admin/reviews');
+
+        $response->assertRedirect(route('login'));
+    }
+
+    public function test_admin_reports_index_redirects_guest_to_login(): void
+    {
+        $response = $this->get('/admin/reports');
+
+        $response->assertRedirect(route('login'));
+    }
 }

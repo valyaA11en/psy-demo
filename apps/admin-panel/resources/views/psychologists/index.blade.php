@@ -1,19 +1,10 @@
-@php
-    $approvalLabels = [
-        'draft' => 'черновик',
-        'pending_review' => 'на модерации',
-        'approved' => 'одобрен',
-        'rejected' => 'отклонён',
-    ];
-@endphp
-
 @extends('layouts.admin', ['title' => 'Модерация психологов'])
 
 @section('content')
     <section style="display: flex; flex-direction: column; gap: 20px;">
         <div class="section-head">
             <div>
-                <p class="small">модерация</p>
+                <p class="small">модерация специалистов</p>
                 <h1 style="margin: 8px 0 0; font-size: 2rem;">Психологи</h1>
             </div>
         </div>
@@ -28,7 +19,7 @@
                     <label for="approval_status">Статус модерации</label>
                     <select id="approval_status" name="approval_status">
                         <option value="">Все</option>
-                        @foreach (['draft', 'pending_review', 'approved', 'rejected'] as $status)
+                        @foreach (array_keys($approvalLabels) as $status)
                             <option value="{{ $status }}" @selected(($filters['approval_status'] ?? '') === $status)>{{ $approvalLabels[$status] }}</option>
                         @endforeach
                     </select>
@@ -60,13 +51,18 @@
                                 </div>
                                 <span class="badge {{ $tone }}">{{ $approvalLabels[$profile->approval_status] ?? $profile->approval_status }}</span>
                             </div>
+
                             <div class="small">
-                                {{ $profile->public_title ?: 'Публичное описание не заполнено' }} · {{ $profile->experience_years }} лет ·
-                                {{ $profile->specializations->pluck('name')->join(', ') ?: 'Специализации не указаны' }}
+                                {{ $profile->public_title ?: 'Публичное описание не заполнено' }}
+                                · {{ $profile->experience_years }} лет опыта
+                                · {{ $profile->specializations->pluck('name')->join(', ') ?: 'Специализации не указаны' }}
                             </div>
+
                             <div class="panel soft" style="padding: 14px;">
-                                <strong>Публичное описание</strong>
-                                <p class="small" style="margin-top: 8px;">{{ $profile->bio ? \Illuminate\Support\Str::limit($profile->bio, 260) : 'Описание пока отсутствует.' }}</p>
+                                <strong>Краткий контекст</strong>
+                                <div class="small" style="margin-top: 8px;">Отзывы: {{ $profile->reviews_count }} · Рейтинг: {{ $profile->rating_avg ?? '—' }}</div>
+                                <div class="small">Документы: {{ $profile->uploaded_files_count }} загружено</div>
+                                <div class="small">Последний модератор: {{ $profile->moderatedBy?->email ?? 'не назначен' }}</div>
                             </div>
                         </div>
 
@@ -87,6 +83,7 @@
                             </div>
                             <div class="inline-actions">
                                 <button class="button primary" type="submit">Сохранить</button>
+                                <a class="button ghost" href="{{ route('admin.psychologists.show', $profile) }}">Открыть кейс</a>
                             </div>
                         </form>
                     </div>

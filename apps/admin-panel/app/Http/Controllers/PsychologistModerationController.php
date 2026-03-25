@@ -2,7 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Complaint;
+use App\Models\Consultation;
 use App\Models\PsychologistProfile;
+use App\Models\Review;
 use App\Support\AdminAuditLogger;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -22,7 +25,10 @@ class PsychologistModerationController extends Controller
         ]);
 
         $query = PsychologistProfile::query()
-            ->with(['user.roles', 'specializations', 'moderatedBy']);
+            ->with(['user.roles', 'specializations', 'moderatedBy'])
+            ->withCount([
+                'files as uploaded_files_count' => fn ($builder) => $builder->where('status', 'uploaded'),
+            ]);
 
         if (! empty($filters['q'])) {
             $search = trim($filters['q']);
@@ -46,6 +52,92 @@ class PsychologistModerationController extends Controller
                 ->paginate(12)
                 ->withQueryString(),
             'filters' => $filters,
+            'approvalLabels' => $this->approvalLabels(),
+        ]);
+    }
+
+    public function show(PsychologistProfile $psychologistProfile): View
+    {
+        $psychologistProfile->load([
+            'user.roles',
+            'specializations',
+            'moderatedBy.roles',
+            'files' => fn ($builder) => $builder
+                ->where('status', '!=', 'deleted')
+                ->latest('created_at'),
+        ]);
+
+        $userId = $psychologistProfile->user_id;
+
+        $stats = [
+            'consultationsTotal' => Consultation::query()
+                ->where('psychologist_user_id', $userId)
+                ->count(),
+            'consultationsCompleted' => Consultation::query()
+                ->where('psychologist_user_id', $userId)
+                ->where('status', 'completed')
+                ->count(),
+            'consultationsUpcoming' => Consultation::query()
+                ->where('psychologist_user_id', $userId)
+                ->where('status', 'scheduled')
+                ->count(),
+            'reviewsPublished' => Review::query()
+                ->where('psychologist_user_id', $userId)
+                ->where('status', 'published')
+                ->count(),
+            'complaintsOpen' => Complaint::query()
+                ->where('target_user_id', $userId)
+                ->whereIn('status', ['new', 'open', 'in_review'])
+                ->count(),
+            'documentsUploaded' => $psychologistProfile->files
+                ->where('status', 'uploaded')
+                ->count(),
+        ];
+
+        $recentReviews = Review::query()
+            ->with(['author.clientProfile', 'consultation'])
+            ->where('psychologist_user_id', $userId)
+            ->latest('created_at')
+            ->limit(5)
+            ->get();
+
+        $recentComplaints = Complaint::query()
+            ->with(['author.clientProfile', 'assignedAdmin', 'consultation'])
+            ->where('target_user_id', $userId)
+            ->latest('created_at')
+            ->limit(5)
+            ->get();
+
+        return view('psychologists.show', [
+            'profile' => $psychologistProfile,
+            'stats' => $stats,
+            'recentReviews' => $recentReviews,
+            'recentComplaints' => $recentComplaints,
+            'approvalLabels' => $this->approvalLabels(),
+            'reviewStatusLabels' => [
+                'published' => 'Опубликован',
+                'hidden' => 'Скрыт',
+                'flagged' => 'Помечен',
+            ],
+            'complaintStatusLabels' => [
+                'new' => 'Новая',
+                'open' => 'Открыта',
+                'in_review' => 'В работе',
+                'resolved' => 'Решена',
+                'rejected' => 'Отклонена',
+            ],
+            'filePurposeLabels' => [
+                'psychologist_verification_document' => 'Документ для верификации',
+                'psychologist_certificate' => 'Сертификат',
+                'psychologist_diploma' => 'Диплом',
+                'psychologist_additional_document' => 'Дополнительный документ',
+                'psychologist_public_photo' => 'Публичное фото',
+            ],
+            'fileStatusLabels' => [
+                'pending' => 'Ожидает загрузки',
+                'uploaded' => 'Загружен',
+                'deleted' => 'Удалён',
+            ],
         ]);
     }
 
@@ -81,5 +173,18 @@ class PsychologistModerationController extends Controller
         );
 
         return back()->with('success', 'Статус модерации психолога обновлён.');
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function approvalLabels(): array
+    {
+        return [
+            'draft' => 'Черновик',
+            'pending_review' => 'На модерации',
+            'approved' => 'Одобрен',
+            'rejected' => 'Отклонён',
+        ];
     }
 }

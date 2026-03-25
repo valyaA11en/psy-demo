@@ -17,4 +17,4 @@ COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/prisma ./prisma
 COPY --from=build /app/prisma.config.ts ./prisma.config.ts
 COPY package*.json ./
-CMD ["node", "dist/main.js"]
+CMD ["node", "dist/src/main.js"]
