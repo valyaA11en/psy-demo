@@ -14,7 +14,9 @@ Route::redirect('/', '/admin/login');
 Route::prefix('admin')->middleware('admin.ip')->group(function (): void {
     Route::middleware('admin.guest')->group(function (): void {
         Route::get('/login', [AdminAuthController::class, 'create'])->name('login');
-        Route::post('/login', [AdminAuthController::class, 'store'])->name('login.store');
+        Route::post('/login', [AdminAuthController::class, 'store'])
+            ->middleware('throttle:5,1')
+            ->name('login.store');
     });
 
     Route::middleware('admin.auth')->group(function (): void {

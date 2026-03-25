@@ -31,6 +31,11 @@ class Complaint extends Model
         return $this->belongsTo(User::class, 'target_user_id', 'id');
     }
 
+    public function consultation(): BelongsTo
+    {
+        return $this->belongsTo(Consultation::class, 'consultation_id', 'id');
+    }
+
     public function assignedAdmin(): BelongsTo
     {
         return $this->belongsTo(User::class, 'assigned_admin_id', 'id');

@@ -17,6 +17,8 @@ import { JwtUser } from "./interfaces/jwt-user.interface";
 import { AuthService } from "./auth.service";
 import { LoginDto } from "./dto/login.dto";
 import { RegisterDto } from "./dto/register.dto";
+import { ResendEmailVerificationDto } from "./dto/resend-email-verification.dto";
+import { VerifyEmailDto } from "./dto/verify-email.dto";
 
 @ApiTags("auth")
 @Controller("auth")
@@ -28,9 +30,29 @@ export class AuthController {
   async register(
     @Body() dto: RegisterDto,
     @Req() request: Request,
+  ) {
+    return this.authService.register(dto, request);
+  }
+
+  @Throttle({ auth: {} })
+  @HttpCode(HttpStatus.OK)
+  @Post("verify-email")
+  async verifyEmail(
+    @Body() dto: VerifyEmailDto,
+    @Req() request: Request,
     @Res({ passthrough: true }) response: Response,
   ) {
-    return this.authService.register(dto, request, response);
+    return this.authService.verifyEmail(dto, request, response);
+  }
+
+  @Throttle({ auth: {} })
+  @HttpCode(HttpStatus.OK)
+  @Post("resend-verification")
+  async resendVerification(
+    @Body() dto: ResendEmailVerificationDto,
+    @Req() request: Request,
+  ) {
+    return this.authService.resendEmailVerification(dto, request);
   }
 
   @Throttle({ auth: {} })

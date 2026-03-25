@@ -63,6 +63,15 @@
                                     <strong>{{ $complaint->type }}</strong>
                                     <div class="small">Автор: {{ $complaint->author?->email ?? 'неизвестен' }}</div>
                                     <div class="small">Цель: {{ $complaint->target?->email ?? 'не указана' }}</div>
+                                    <div class="small">
+                                        Консультация:
+                                        @if ($complaint->consultation)
+                                            {{ $complaint->consultation->scheduled_at?->format('d.m.Y H:i') ?? $complaint->consultation->id }}
+                                            / {{ $complaint->consultation->status }}
+                                        @else
+                                            не указана
+                                        @endif
+                                    </div>
                                 </div>
                                 <span class="badge {{ $tone }}">{{ $statusLabels[$complaint->status] ?? $complaint->status }}</span>
                             </div>

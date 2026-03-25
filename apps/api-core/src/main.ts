@@ -18,13 +18,15 @@ async function bootstrap() {
       configService.get<string>("WEB_APP_ORIGIN", "http://localhost:3000"),
     ),
   );
-  const swaggerEnabled = configService.get<string>("SWAGGER_ENABLED", "false") === "true";
+  const swaggerEnabled =
+    configService.get<string>("SWAGGER_ENABLED", "false") === "true" &&
+    configService.get<string>("NODE_ENV", "development") !== "production";
 
   app.setGlobalPrefix("api/v1");
   app.use(helmet());
   app.use(cookieParser());
   app.use((req: Request, res: Response, next: NextFunction) => {
-    (req as any).requestId = req.headers["x-request-id"] || randomUUID();
+    (req as any).requestId = randomUUID();
     res.setHeader("x-request-id", String((req as any).requestId));
     next();
   });

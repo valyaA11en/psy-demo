@@ -267,6 +267,12 @@ async function main() {
     },
   });
 
+  await prisma.review.deleteMany({
+    where: {
+      psychologistUserId: psychologist.id,
+    },
+  });
+
   await prisma.consultationStatusHistory.deleteMany({
     where: {
       consultation: {
@@ -363,6 +369,16 @@ async function main() {
     },
   });
 
+  const completedSlot = await prisma.appointmentSlot.create({
+    data: {
+      psychologistProfileId: psychologist.id,
+      startsAt: localBase.minus({ days: 5 }).set({ hour: 12, minute: 0 }).toUTC().toJSDate(),
+      endsAt: localBase.minus({ days: 5 }).set({ hour: 12, minute: 50 }).toUTC().toJSDate(),
+      status: AppointmentSlotStatus.booked,
+      source: AppointmentSlotSource.manual,
+    },
+  });
+
   const bookedSlot = await prisma.appointmentSlot.create({
     data: {
       psychologistProfileId: psychologist.id,
@@ -373,7 +389,19 @@ async function main() {
     },
   });
 
-  const consultation = await prisma.consultation.create({
+  const completedConsultation = await prisma.consultation.create({
+    data: {
+      clientUserId: client.id,
+      psychologistUserId: psychologist.id,
+      slotId: completedSlot.id,
+      status: ConsultationStatus.completed,
+      scheduledAt: completedSlot.startsAt,
+      clientMessage: "Хотела разобраться с тревогой и постоянным напряжением.",
+      idempotencyKey: "seed-booking-completed-0001",
+    },
+  });
+
+  const scheduledConsultation = await prisma.consultation.create({
     data: {
       clientUserId: client.id,
       psychologistUserId: psychologist.id,
@@ -387,12 +415,55 @@ async function main() {
 
   await prisma.consultationStatusHistory.create({
     data: {
-      consultationId: consultation.id,
+      consultationId: completedConsultation.id,
       fromStatus: null,
       toStatus: ConsultationStatus.scheduled,
       changedByUserId: client.id,
       changedByRole: "client",
       reasonCode: "booking_created",
+    },
+  });
+
+  await prisma.consultationStatusHistory.create({
+    data: {
+      consultationId: completedConsultation.id,
+      fromStatus: ConsultationStatus.scheduled,
+      toStatus: ConsultationStatus.completed,
+      changedByUserId: psychologist.id,
+      changedByRole: "psychologist",
+      reasonCode: "consultation_completed",
+    },
+  });
+
+  await prisma.consultationStatusHistory.create({
+    data: {
+      consultationId: scheduledConsultation.id,
+      fromStatus: null,
+      toStatus: ConsultationStatus.scheduled,
+      changedByUserId: client.id,
+      changedByRole: "client",
+      reasonCode: "booking_created",
+    },
+  });
+
+  await prisma.review.create({
+    data: {
+      consultationId: completedConsultation.id,
+      clientUserId: client.id,
+      psychologistUserId: psychologist.id,
+      rating: 5,
+      text: "Очень спокойная и бережная консультация. После встречи стало проще структурировать мысли.",
+      status: "published",
+    },
+  });
+
+  await prisma.psychologistProfile.update({
+    where: {
+      userId: psychologist.id,
+    },
+    data: {
+      ratingAvg: 5,
+      reviewsCount: 1,
     },
   });
 

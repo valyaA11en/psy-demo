@@ -26,6 +26,7 @@ class AdminRoutesTest extends TestCase
 
         $response->assertOk();
         $response->assertSee('Email');
+        $this->assertNotEmpty($response->headers->get('X-Request-Id'));
     }
 
     public function test_admin_dashboard_redirects_guest_to_login(): void
@@ -44,5 +45,15 @@ class AdminRoutesTest extends TestCase
             ->get('/admin/login');
 
         $response->assertForbidden();
+    }
+
+    public function test_admin_request_id_is_generated_server_side(): void
+    {
+        $response = $this
+            ->withHeader('X-Request-Id', 'spoofed-request-id')
+            ->get('/admin/login');
+
+        $response->assertOk();
+        $this->assertNotSame('spoofed-request-id', $response->headers->get('X-Request-Id'));
     }
 }

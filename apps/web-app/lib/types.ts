@@ -51,6 +51,28 @@ export type PublicPsychologist = {
   upcomingSlots: SlotPreview[];
 };
 
+export type PublicReview = {
+  id: string;
+  consultationId: string | null;
+  rating: number;
+  text: string | null;
+  status: string;
+  createdAt: string;
+  authorName: string;
+};
+
+export type PublicReviewListResponse = {
+  psychologist: {
+    id: string;
+    slug: string;
+    fullName: string;
+    ratingAvg: number;
+    reviewsCount: number;
+  };
+  items: PublicReview[];
+  pagination: Pagination;
+};
+
 export type CatalogResponse = {
   items: PublicPsychologist[];
   pagination: Pagination;
@@ -151,6 +173,20 @@ export type AuthSessionPayload = {
   user: AuthUser;
 };
 
+export type RegisterResult = {
+  success: true;
+  requiresEmailVerification: true;
+  email: string;
+  verificationExpiresAt: string;
+  debugVerificationLink?: string;
+};
+
+export type ResendVerificationResult = {
+  success: true;
+  message: string;
+  debugVerificationLink?: string;
+};
+
 export type LatestPayment = {
   id: string;
   provider: string;
@@ -159,6 +195,16 @@ export type LatestPayment = {
   status: string;
   paidAt: string | null;
   createdAt: string;
+};
+
+export type BookingReview = {
+  id: string;
+  consultationId: string | null;
+  rating: number;
+  text: string | null;
+  status: string;
+  createdAt: string;
+  authorName?: string | null;
 };
 
 export type DashboardBooking = {
@@ -189,6 +235,8 @@ export type DashboardBooking = {
     timezone: string | null;
   };
   latestPayment: LatestPayment | null;
+  review: BookingReview | null;
+  canLeaveReview: boolean;
   statusHistory?: Array<{
     id: string;
     fromStatus: string | null;
@@ -314,6 +362,35 @@ export type NotificationListResponse = {
     unreadOnly: boolean;
   };
   unreadCount: number;
+};
+
+export type ComplaintRecord = {
+  id: string;
+  consultationId: string | null;
+  type: string;
+  text: string;
+  status: string;
+  resolutionNote: string | null;
+  createdAt: string;
+  authorUserId: string;
+  target: {
+    userId: string;
+    displayName: string | null;
+    publicTitle: string | null;
+  } | null;
+  consultation: {
+    id: string;
+    scheduledAt: string;
+    status: string;
+  } | null;
+};
+
+export type ComplaintListResponse = {
+  items: ComplaintRecord[];
+  pagination: Pagination;
+  filters: {
+    status: string | null;
+  };
 };
 
 export type SessionInfo = {

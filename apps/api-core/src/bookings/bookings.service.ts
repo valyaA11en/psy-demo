@@ -75,6 +75,16 @@ const bookingListInclude = {
       createdAt: true,
     },
   },
+  review: {
+    select: {
+      id: true,
+      consultationId: true,
+      rating: true,
+      text: true,
+      status: true,
+      createdAt: true,
+    },
+  },
 } satisfies Prisma.ConsultationInclude;
 
 const bookingDetailInclude = {
@@ -804,6 +814,20 @@ export class BookingsService {
             createdAt: booking.payments[0].createdAt.toISOString(),
           }
         : null,
+      review: booking.review
+        ? {
+            id: booking.review.id,
+            consultationId: booking.review.consultationId,
+            rating: booking.review.rating,
+            text: booking.review.text,
+            status: booking.review.status,
+            createdAt: booking.review.createdAt.toISOString(),
+          }
+        : null,
+      canLeaveReview:
+        view === "client" &&
+        booking.status === ConsultationStatus.completed &&
+        booking.review === null,
     } as Record<string, unknown>;
 
     if (view === "client" || view === "admin") {

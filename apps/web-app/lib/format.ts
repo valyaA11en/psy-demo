@@ -54,18 +54,22 @@ export function humanizeCode(value: string | null | undefined) {
   if (!value) {
     return "не указано";
   }
+
   const dictionary: Record<string, string> = {
     client: "клиент",
     psychologist: "психолог",
     admin: "администратор",
     superadmin: "суперадмин",
-    open: "свободен",
+    open: "открыт",
     held: "в резерве",
     booked: "забронирован",
     blocked: "заблокирован",
     cancelled: "отменён",
     scheduled: "запланирована",
     completed: "завершена",
+    new: "новая",
+    in_review: "в работе",
+    resolved: "решена",
     pending: "ожидает",
     succeeded: "успешно",
     failed: "ошибка",
@@ -74,6 +78,8 @@ export function humanizeCode(value: string | null | undefined) {
     pending_review: "на модерации",
     approved: "одобрен",
     rejected: "отклонён",
+    published: "опубликован",
+    hidden: "скрыт",
     online: "онлайн",
     offline: "офлайн",
     idle: "ожидание",
@@ -88,7 +94,7 @@ export function humanizeCode(value: string | null | undefined) {
     telegram: "telegram",
     processing: "обрабатывается",
     sent: "доставлено",
-    paid: "оплачено",
+    paid: "оплачен",
     payment_required: "требуется оплата",
     mock_video: "тестовый провайдер",
     ru: "русский",
@@ -101,7 +107,16 @@ export function humanizeCode(value: string | null | undefined) {
     "payment.failed": "платёж отклонён",
     "payment.cancelled": "платёж отменён",
     "payment.updated": "обновлён платёж",
+    "review.created": "создан отзыв",
+    "complaint.created": "создана жалоба",
     "video.session_ready": "видеосессия готова",
+    service_quality: "качество услуги",
+    no_show: "неявка",
+    refund_request: "запрос возврата",
+    privacy: "приватность",
+    abuse: "некорректное поведение",
+    billing: "оплата",
+    other: "другое",
   };
 
   Object.assign(dictionary, {

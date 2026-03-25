@@ -5,6 +5,8 @@ import { startTransition, useEffect, useEffectEvent, useState } from "react";
 import { io } from "socket.io-client";
 import { AvailabilityExceptionsPanel } from "@/components/availability-exceptions-panel";
 import { AvailabilityRulesPanel } from "@/components/availability-rules-panel";
+import { BookingComplaintPanel } from "@/components/booking-complaint-panel";
+import { BookingReviewPanel } from "@/components/booking-review-panel";
 import { NotificationPreferencesPanel } from "@/components/notification-preferences-panel";
 import { AppointmentSlotsPanel } from "@/components/appointment-slots-panel";
 import { useAuth } from "@/components/auth-provider";
@@ -16,6 +18,8 @@ import type {
   AvailabilitySlot,
   AuthUser,
   BookingListResponse,
+  ComplaintListResponse,
+  ComplaintRecord,
   DashboardBooking,
   MyAvailabilitySlotsResponse,
   NotificationListResponse,
@@ -81,6 +85,7 @@ export function DashboardClient() {
   const [availabilityExceptions, setAvailabilityExceptions] = useState<AvailabilityException[]>([]);
   const [notificationPreferences, setNotificationPreferences] = useState<NotificationPreferences | null>(null);
   const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
+  const [complaints, setComplaints] = useState<ComplaintRecord[]>([]);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -101,11 +106,12 @@ export function DashboardClient() {
       setProfile(profileData);
 
       if (user.roles.includes("client")) {
-        const [bookingData, paymentData, notificationData, preferenceData] = await Promise.all([
+        const [bookingData, paymentData, notificationData, preferenceData, complaintData] = await Promise.all([
           request<BookingListResponse>("/bookings/me"),
           request<PaymentListResponse>("/payments/me"),
           request<NotificationListResponse>("/notifications/me?limit=6"),
           request<NotificationPreferences>("/notifications/me/preferences"),
+          request<ComplaintListResponse>("/complaints/me?limit=6"),
         ]);
 
         setBookings(bookingData.items);
@@ -116,12 +122,13 @@ export function DashboardClient() {
         setNotificationPreferences(preferenceData);
         setNotifications(notificationData.items);
         setUnreadNotifications(notificationData.unreadCount);
+        setComplaints(complaintData.items);
         return;
       }
 
       if (user.roles.includes("psychologist")) {
         const slotQuery = buildAvailabilitySlotsQuery(availabilitySlotFilters);
-        const [bookingData, notificationData, exceptionData, ruleData, slotData, preferenceData] =
+        const [bookingData, notificationData, exceptionData, ruleData, slotData, preferenceData, complaintData] =
           await Promise.all([
           request<BookingListResponse>("/bookings/psychologist/me"),
           request<NotificationListResponse>("/notifications/me?limit=6"),
@@ -129,6 +136,7 @@ export function DashboardClient() {
           request<AvailabilityRule[]>("/availability/me/rules"),
           request<MyAvailabilitySlotsResponse>(`/availability/me/slots?${slotQuery}`),
           request<NotificationPreferences>("/notifications/me/preferences"),
+          request<ComplaintListResponse>("/complaints/me?limit=6"),
         ]);
         setBookings(bookingData.items);
         setPayments([]);
@@ -138,6 +146,7 @@ export function DashboardClient() {
         setNotificationPreferences(preferenceData);
         setNotifications(notificationData.items);
         setUnreadNotifications(notificationData.unreadCount);
+        setComplaints(complaintData.items);
         return;
       }
 
@@ -146,6 +155,7 @@ export function DashboardClient() {
       setAvailabilityRules([]);
       setAvailabilitySlots([]);
       setAvailabilityExceptions([]);
+      setComplaints([]);
       const [notificationData, preferenceData] = await Promise.all([
         request<NotificationListResponse>("/notifications/me?limit=6"),
         request<NotificationPreferences>("/notifications/me/preferences"),
@@ -234,6 +244,22 @@ export function DashboardClient() {
     return request<TelegramLinkSession>("/notifications/me/preferences/telegram-link", {
       method: "POST",
     });
+  }
+
+  async function createReview(input: { consultationId: string; rating: number; text?: string }) {
+    await request(`/reviews`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+    await loadData();
+  }
+
+  async function createComplaint(input: { consultationId: string; type: string; text: string }) {
+    await request(`/complaints`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+    await loadData();
   }
 
   async function createAvailabilityRule(input: {
@@ -508,6 +534,16 @@ export function DashboardClient() {
                       ) : null}
                     </div>
                   ) : null}
+
+                  {user.roles.includes("client") || booking.review ? (
+                    <BookingReviewPanel booking={booking} onCreate={createReview} />
+                  ) : null}
+
+                  <BookingComplaintPanel
+                    booking={booking}
+                    complaint={complaints.find((item) => item.consultationId === booking.id) ?? null}
+                    onCreate={createComplaint}
+                  />
                 </article>
               ))
             )}
@@ -562,6 +598,35 @@ export function DashboardClient() {
               onUpdate={updateNotificationPreferences}
               preferences={notificationPreferences}
             />
+
+            <div className="surface">
+              <p className="caption">Жалобы</p>
+              <h3 className="card-title">Мои обращения</h3>
+              {complaints.length === 0 ? (
+                <p className="section-text">Жалоб пока нет.</p>
+              ) : (
+                <div className="stack compact-stack">
+                  {complaints.map((complaint) => (
+                    <div className="surface surface-muted" key={complaint.id}>
+                      <div className="meta-row">
+                        <strong>{humanizeCode(complaint.type)}</strong>
+                        <span className={`status-badge status-${complaint.status}`}>
+                          {humanizeCode(complaint.status)}
+                        </span>
+                      </div>
+                      <div className="meta-row">
+                        <span>
+                          {complaint.consultation
+                            ? formatCompactDateTime(complaint.consultation.scheduledAt)
+                            : "без привязки"}
+                        </span>
+                        {complaint.target?.displayName ? <span>{complaint.target.displayName}</span> : null}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
 
             <div className="surface">
               <div className="section-head">

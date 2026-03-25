@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BookingActions } from "@/components/booking-actions";
 import { formatDateTime, formatMoney, humanizeCode } from "@/lib/format";
-import { getPsychologist, getPsychologistSlots } from "@/lib/server-api";
+import { getPsychologist, getPsychologistReviews, getPsychologistSlots } from "@/lib/server-api";
 
 type PsychologistPageProps = {
   params: Promise<{
@@ -14,9 +14,10 @@ export default async function PsychologistPage({ params }: PsychologistPageProps
   const { slug } = await params;
 
   try {
-    const [psychologist, slotsResponse] = await Promise.all([
+    const [psychologist, slotsResponse, reviewsResponse] = await Promise.all([
       getPsychologist(slug),
       getPsychologistSlots(slug, "?limit=8"),
+      getPsychologistReviews(slug, "?limit=6"),
     ]);
 
     return (
@@ -94,6 +95,33 @@ export default async function PsychologistPage({ params }: PsychologistPageProps
                 После выбора слота создаётся консультация, а оплату можно провести в кабинете через тестовый сценарий оплаты.
               </p>
               <BookingActions psychologistName={psychologist.fullName} slots={slotsResponse.items} />
+            </div>
+
+            <div className="surface stack">
+              <div>
+                <p className="caption">Отзывы клиентов</p>
+                <h2 className="section-title">Опубликованные отзывы</h2>
+              </div>
+
+              {reviewsResponse.items.length === 0 ? (
+                <p className="section-text">Пока нет опубликованных отзывов.</p>
+              ) : (
+                <div className="stack compact-stack">
+                  {reviewsResponse.items.map((review) => (
+                    <article className="surface surface-muted" key={review.id}>
+                      <div className="meta-row">
+                        <strong>{review.authorName}</strong>
+                        <span>{formatDateTime(review.createdAt)}</span>
+                      </div>
+                      <div className="meta-row">
+                        <span>Оценка: {review.rating} / 5</span>
+                        <span>{humanizeCode(review.status)}</span>
+                      </div>
+                      {review.text ? <p className="section-text">{review.text}</p> : null}
+                    </article>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 

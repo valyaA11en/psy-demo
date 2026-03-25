@@ -22,7 +22,7 @@ class ComplaintController extends Controller
             'q' => ['nullable', 'string', 'max:255'],
         ]);
 
-        $query = Complaint::query()->with(['author', 'target', 'assignedAdmin']);
+        $query = Complaint::query()->with(['author', 'target', 'assignedAdmin', 'consultation']);
 
         if (! empty($filters['status'])) {
             $query->where('status', $filters['status']);

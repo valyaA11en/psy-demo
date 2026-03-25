@@ -7,6 +7,7 @@ import { AvailabilityModule } from "./availability/availability.module";
 import { AuditModule } from "./audit/audit.module";
 import { BookingsModule } from "./bookings/bookings.module";
 import { CatalogModule } from "./catalog/catalog.module";
+import { ComplaintsModule } from "./complaints/complaints.module";
 import { createThrottlerOptions } from "./common/throttle/throttle.config";
 import { HttpExceptionFilter } from "./common/filters/http-exception.filter";
 import { RolesGuard } from "./common/guards/roles.guard";
@@ -17,6 +18,7 @@ import { PaymentsModule } from "./payments/payments.module";
 import { PsychologistsModule } from "./psychologists/psychologists.module";
 import { PrismaModule } from "./prisma/prisma.module";
 import { RealtimeModule } from "./realtime/realtime.module";
+import { ReviewsModule } from "./reviews/reviews.module";
 import { UsersModule } from "./users/users.module";
 import { VideoSessionsModule } from "./video-sessions/video-sessions.module";
 
@@ -39,8 +41,10 @@ import { VideoSessionsModule } from "./video-sessions/video-sessions.module";
     NotificationsModule,
     AvailabilityModule,
     BookingsModule,
+    ComplaintsModule,
     PaymentsModule,
     VideoSessionsModule,
+    ReviewsModule,
     UsersModule,
     CatalogModule,
     PsychologistsModule,

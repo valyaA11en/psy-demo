@@ -30,13 +30,6 @@ class RestrictAdminAccessByIp
 
     private function resolveClientIp(Request $request): ?string
     {
-        $forwardedFor = $request->headers->get('X-Forwarded-For');
-        if (is_string($forwardedFor) && $forwardedFor !== '') {
-            $firstIp = trim(explode(',', $forwardedFor)[0]);
-
-            return $firstIp !== '' ? $firstIp : null;
-        }
-
         $ip = $request->ip();
 
         return is_string($ip) && $ip !== '' ? $ip : null;
