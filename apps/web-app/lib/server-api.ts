@@ -3,6 +3,7 @@ import type {
   ApiErrorPayload,
   CatalogResponse,
   PublicPsychologist,
+  PublicReviewListResponse,
   PublicSlotsResponse,
   Specialization,
 } from "@/lib/types";
@@ -55,4 +56,8 @@ export async function getPsychologist(slug: string) {
 
 export async function getPsychologistSlots(slug: string, query = "") {
   return apiServerGet<PublicSlotsResponse>(`/availability/psychologists/${slug}/slots${query}`);
+}
+
+export async function getPsychologistReviews(slug: string, query = "") {
+  return apiServerGet<PublicReviewListResponse>(`/reviews/psychologists/${slug}${query}`);
 }

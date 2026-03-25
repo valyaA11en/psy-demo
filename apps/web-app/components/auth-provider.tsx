@@ -14,6 +14,8 @@ import type {
   ApiErrorPayload,
   AuthSessionPayload,
   AuthUser,
+  RegisterResult,
+  ResendVerificationResult,
 } from "@/lib/types";
 
 type RegisterInput = {
@@ -35,7 +37,9 @@ type AuthContextValue = {
   accessToken: string | null;
   user: AuthUser | null;
   login: (email: string, password: string) => Promise<AuthSessionPayload>;
-  register: (input: RegisterInput) => Promise<AuthSessionPayload>;
+  register: (input: RegisterInput) => Promise<RegisterResult>;
+  verifyEmail: (token: string) => Promise<AuthSessionPayload>;
+  resendVerification: (email: string) => Promise<ResendVerificationResult>;
   logout: () => Promise<void>;
   request: <T>(path: string, init?: RequestInit, options?: RequestOptions) => Promise<T>;
 };
@@ -169,9 +173,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }),
     });
 
+    return parseEnvelope<RegisterResult>(response);
+  }
+
+  async function verifyEmail(token: string) {
+    const response = await fetch(`${clientApiBaseUrl()}/auth/verify-email`, {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ token }),
+    });
+
     const session = await parseEnvelope<AuthSessionPayload>(response);
     applySession(session);
     return session;
+  }
+
+  async function resendVerification(email: string) {
+    const response = await fetch(`${clientApiBaseUrl()}/auth/resend-verification`, {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ email }),
+    });
+
+    return parseEnvelope<ResendVerificationResult>(response);
   }
 
   async function logout() {
@@ -222,6 +252,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user,
         login,
         register,
+        verifyEmail,
+        resendVerification,
         logout,
         request,
       }}

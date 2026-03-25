@@ -5,6 +5,7 @@ import {
   IsIn,
   IsOptional,
   IsString,
+  Matches,
   MaxLength,
   MinLength,
 } from "class-validator";
@@ -18,6 +19,9 @@ export class RegisterDto {
   @IsString()
   @MinLength(8)
   @MaxLength(128)
+  @Matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,128}$/, {
+    message: "Пароль должен содержать строчную букву, заглавную букву и цифру",
+  })
   password!: string;
 
   @ApiProperty({ enum: ["client", "psychologist"] })
