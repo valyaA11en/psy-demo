@@ -1,20 +1,20 @@
+@extends('layouts.admin', ['title' => 'Жалобы'])
+
 @php
-    $statusLabels = [
-        'new' => 'новая',
-        'open' => 'открыта',
-        'in_review' => 'в работе',
-        'resolved' => 'решена',
-        'rejected' => 'отклонена',
+    $toneByStatus = [
+        'new' => 'warn',
+        'open' => 'warn',
+        'in_review' => 'warn',
+        'resolved' => 'success',
+        'rejected' => 'danger',
     ];
 @endphp
-
-@extends('layouts.admin', ['title' => 'Жалобы'])
 
 @section('content')
     <section style="display: flex; flex-direction: column; gap: 20px;">
         <div class="section-head">
             <div>
-                <p class="small">очередь безопасности</p>
+                <p class="small">очередь безопасности и модерации</p>
                 <h1 style="margin: 8px 0 0; font-size: 2rem;">Жалобы</h1>
             </div>
         </div>
@@ -29,14 +29,14 @@
                     <label for="status">Статус</label>
                     <select id="status" name="status">
                         <option value="">Все</option>
-                        @foreach (['new', 'open', 'in_review', 'resolved', 'rejected'] as $status)
-                            <option value="{{ $status }}" @selected(($filters['status'] ?? '') === $status)>{{ $statusLabels[$status] }}</option>
+                        @foreach ($statusOptions as $statusCode => $statusLabel)
+                            <option value="{{ $statusCode }}" @selected(($filters['status'] ?? '') === $statusCode)>{{ $statusLabel }}</option>
                         @endforeach
                     </select>
                 </div>
                 <div class="field">
                     <label for="type">Тип</label>
-                    <input id="type" name="type" type="text" value="{{ $filters['type'] ?? '' }}" placeholder="abuse, refund, privacy">
+                    <input id="type" name="type" type="text" value="{{ $filters['type'] ?? '' }}" placeholder="privacy, abuse, refund">
                 </div>
                 <div class="inline-actions" style="align-items: end;">
                     <button class="button primary" type="submit">Применить</button>
@@ -47,14 +47,6 @@
 
         <div class="stack">
             @forelse ($complaints as $complaint)
-                @php
-                    $tone = match($complaint->status) {
-                        'resolved' => 'success',
-                        'rejected' => 'danger',
-                        'new', 'open', 'in_review' => 'warn',
-                        default => '',
-                    };
-                @endphp
                 <article class="panel" style="padding: 20px;">
                     <div class="two-col">
                         <div class="stack">
@@ -63,6 +55,7 @@
                                     <strong>{{ $complaint->type }}</strong>
                                     <div class="small">Автор: {{ $complaint->author?->email ?? 'неизвестен' }}</div>
                                     <div class="small">Цель: {{ $complaint->target?->email ?? 'не указана' }}</div>
+                                    <div class="small">Назначен: {{ $complaint->assignedAdmin?->email ?? 'никто' }}</div>
                                     <div class="small">
                                         Консультация:
                                         @if ($complaint->consultation)
@@ -73,37 +66,34 @@
                                         @endif
                                     </div>
                                 </div>
-                                <span class="badge {{ $tone }}">{{ $statusLabels[$complaint->status] ?? $complaint->status }}</span>
+                                <span class="badge {{ $toneByStatus[$complaint->status] ?? '' }}">
+                                    {{ $statusOptions[$complaint->status] ?? $complaint->status }}
+                                </span>
                             </div>
+
                             <div class="panel soft" style="padding: 14px;">
                                 <strong>Текст жалобы</strong>
                                 <p class="small" style="margin-top: 8px; line-height: 1.7;">{{ \Illuminate\Support\Str::limit($complaint->text, 420) }}</p>
                             </div>
                         </div>
 
-                        <form class="stack" action="{{ route('admin.complaints.update', $complaint) }}" method="post">
-                            @csrf
-                            @method('PATCH')
-                            <div class="field">
-                                <label for="status_{{ $complaint->id }}">Статус</label>
-                                <select id="status_{{ $complaint->id }}" name="status">
-                                    @foreach (['new', 'open', 'in_review', 'resolved', 'rejected'] as $status)
-                                        <option value="{{ $status }}" @selected($complaint->status === $status)>{{ $statusLabels[$status] }}</option>
-                                    @endforeach
-                                </select>
+                        <div class="stack">
+                            <div class="panel soft" style="padding: 14px;">
+                                <div class="small">Создано: {{ $complaint->created_at?->format('d.m.Y H:i') ?? '—' }}</div>
+                                <div class="small">Resolution note: {{ $complaint->resolution_note ?: 'пока не заполнен' }}</div>
                             </div>
-                            <div class="field">
-                                <label for="resolution_note_{{ $complaint->id }}">Комментарий по решению</label>
-                                <textarea id="resolution_note_{{ $complaint->id }}" name="resolution_note">{{ $complaint->resolution_note }}</textarea>
-                            </div>
+
                             <div class="inline-actions">
-                                <label class="small" style="display: inline-flex; align-items: center; gap: 8px;">
-                                    <input name="assign_to_me" type="checkbox" value="1"> Назначить мне
-                                </label>
-                                <button class="button primary" type="submit">Сохранить</button>
+                                <a class="button primary" href="{{ route('admin.complaints.show', $complaint) }}">Открыть кейс</a>
+                                <form action="{{ route('admin.complaints.update', $complaint) }}" method="post">
+                                    @csrf
+                                    @method('PATCH')
+                                    <input name="status" type="hidden" value="{{ $complaint->status }}">
+                                    <input name="action" type="hidden" value="take_ownership">
+                                    <button class="button ghost" type="submit">Забрать себе</button>
+                                </form>
                             </div>
-                            <div class="small">Назначенный админ: {{ $complaint->assignedAdmin?->email ?? 'никто' }}</div>
-                        </form>
+                        </div>
                     </div>
                 </article>
             @empty

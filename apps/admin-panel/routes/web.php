@@ -30,6 +30,7 @@ Route::prefix('admin')->middleware('admin.ip')->group(function (): void {
         Route::patch('/psychologists/{psychologistProfile}', [PsychologistModerationController::class, 'update'])->name('admin.psychologists.update');
 
         Route::get('/complaints', [ComplaintController::class, 'index'])->name('admin.complaints.index');
+        Route::get('/complaints/{complaint}', [ComplaintController::class, 'show'])->name('admin.complaints.show');
         Route::patch('/complaints/{complaint}', [ComplaintController::class, 'update'])->name('admin.complaints.update');
 
         Route::get('/payments', [PaymentController::class, 'index'])->name('admin.payments.index');
