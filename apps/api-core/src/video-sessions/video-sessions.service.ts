@@ -7,11 +7,12 @@ import {
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
+import { AccessToken } from "livekit-server-sdk";
 import { DateTime } from "luxon";
 import type { Request } from "express";
 import { AuditService } from "../audit/audit.service";
-import { VideoAccessTokenPayload } from "./interfaces/video-access-token-payload.interface";
 import { PrismaService } from "../prisma/prisma.service";
+import { VideoAccessTokenPayload } from "./interfaces/video-access-token-payload.interface";
 
 const PARTICIPANT_JOIN_OPEN_BEFORE_MINUTES = 30;
 const PARTICIPANT_JOIN_CLOSE_AFTER_MINUTES = 180;
@@ -41,6 +42,16 @@ type ConsultationRecord = Prisma.ConsultationGetPayload<{
   include: typeof consultationInclude;
 }>;
 
+type ParticipantRole = "client" | "psychologist";
+
+type ProviderAccess = {
+  accessToken: string;
+  issuedAt: string;
+  expiresAt: string;
+  expiresInSec: number;
+  providerServerUrl: string | null;
+};
+
 @Injectable()
 export class VideoSessionsService {
   constructor(
@@ -69,43 +80,32 @@ export class VideoSessionsService {
     const readyConsultation = await this.ensureProvisionedIfEligible(consultation);
 
     if (readyConsultation.status !== ConsultationStatus.scheduled) {
-      throw new ConflictException("Доступ к видео доступен только для запланированных консультаций");
+      throw new ConflictException("Доступ к видеосессии разрешен только для запланированных консультаций");
     }
 
     if (!this.hasSucceededPayment(readyConsultation)) {
-      throw new ConflictException("Для доступа к видео нужна успешная оплата");
+      throw new ConflictException("Для доступа к видеосессии нужна успешная оплата");
     }
 
     const window = this.resolveAccessWindow(readyConsultation);
     const now = DateTime.utc();
 
     if (now < window.opensAt) {
-      throw new ConflictException(`Доступ к видео откроется в ${window.opensAt.toISO()}`);
+      throw new ConflictException(`Доступ к видеосессии откроется в ${window.opensAt.toISO()}`);
     }
 
     if (now > window.closesAt) {
-      throw new ConflictException("Окно доступа к видео истекло");
+      throw new ConflictException("Окно доступа к видеосессии уже закрыто");
     }
 
     if (!readyConsultation.meetingRoomId || !readyConsultation.meetingProvider) {
-      throw new ConflictException("Видеосессия ещё не подготовлена");
+      throw new ConflictException("Видеосессия еще не подготовлена");
     }
 
-    const ttl = Number(this.configService.get<string>("VIDEO_ACCESS_TTL", "900"));
-    const issuedAt = DateTime.utc();
-    const expiresAt = issuedAt.plus({ seconds: ttl });
-    const accessToken = await this.jwtService.signAsync<VideoAccessTokenPayload>(
-      {
-        sub: viewerUserId,
-        consultationId: readyConsultation.id,
-        roomId: readyConsultation.meetingRoomId,
-        participantRole,
-        tokenType: "video_access",
-      },
-      {
-        secret: this.videoAccessSecret(),
-        expiresIn: ttl,
-      },
+    const access = await this.createProviderAccessToken(
+      readyConsultation,
+      participantRole,
+      viewerUserId,
     );
 
     await this.auditService.log({
@@ -128,10 +128,11 @@ export class VideoSessionsService {
       provider: readyConsultation.meetingProvider,
       roomId: readyConsultation.meetingRoomId,
       participantRole,
-      accessToken,
-      issuedAt: issuedAt.toISO(),
-      expiresAt: expiresAt.toISO(),
-      expiresInSec: ttl,
+      accessToken: access.accessToken,
+      issuedAt: access.issuedAt,
+      expiresAt: access.expiresAt,
+      expiresInSec: access.expiresInSec,
+      providerServerUrl: access.providerServerUrl,
       joinUrl: this.joinUrl(readyConsultation.id),
     };
   }
@@ -155,7 +156,7 @@ export class VideoSessionsService {
     consultation: ConsultationRecord,
     viewerUserId: string,
     roles: string[],
-  ): "client" | "psychologist" {
+  ): ParticipantRole {
     if (consultation.clientUserId === viewerUserId) {
       return "client";
     }
@@ -165,10 +166,10 @@ export class VideoSessionsService {
     }
 
     if (roles.includes("admin") || roles.includes("superadmin")) {
-      throw new ForbiddenException("Администраторам запрещён доступ к ссылкам на сессию и токенам видеокомнаты");
+      throw new ForbiddenException("Администраторам запрещен доступ к ссылкам и токенам видеосессии");
     }
 
-    throw new ForbiddenException("У вас нет доступа к этой консультационной сессии");
+    throw new ForbiddenException("У вас нет доступа к этой видеосессии");
   }
 
   private async ensureProvisionedIfEligible(consultation: ConsultationRecord) {
@@ -180,15 +181,22 @@ export class VideoSessionsService {
       return consultation;
     }
 
-    const roomId = `mock-room-${consultation.id}`;
+    const provider = this.desiredProvider();
+    const roomId =
+      provider === "livekit"
+        ? this.liveKitRoomName(consultation.id)
+        : `mock-room-${consultation.id}`;
+
     await this.prisma.consultation.update({
       where: {
         id: consultation.id,
       },
       data: {
-        meetingProvider: consultation.meetingProvider ?? "mock_video",
+        meetingProvider: consultation.meetingProvider ?? provider,
         meetingRoomId: consultation.meetingRoomId ?? roomId,
-        meetingJoinTokenRef: consultation.meetingJoinTokenRef ?? `mock-video:${consultation.id}`,
+        meetingJoinTokenRef:
+          consultation.meetingJoinTokenRef ??
+          (provider === "livekit" ? `livekit-room:${roomId}` : `mock-video:${consultation.id}`),
       },
     });
 
@@ -209,10 +217,7 @@ export class VideoSessionsService {
     };
   }
 
-  private serializeSession(
-    consultation: ConsultationRecord,
-    participantRole: "client" | "psychologist",
-  ) {
+  private serializeSession(consultation: ConsultationRecord, participantRole: ParticipantRole) {
     const window = this.resolveAccessWindow(consultation);
     const now = DateTime.utc();
     const paymentSucceeded = this.hasSucceededPayment(consultation);
@@ -233,6 +238,9 @@ export class VideoSessionsService {
       endsAt: consultation.slot.endsAt.toISOString(),
       paymentStatus: paymentSucceeded ? "paid" : "payment_required",
       joinUrl: consultation.meetingRoomId ? this.joinUrl(consultation.id) : null,
+      providerConnection: {
+        serverUrl: consultation.meetingProvider === "livekit" ? this.liveKitWsUrlOrNull() : null,
+      },
       accessWindow: {
         opensAt: window.opensAt.toISO(),
         closesAt: window.closesAt.toISO(),
@@ -252,10 +260,118 @@ export class VideoSessionsService {
     return `${origin}/session/${consultationId}`;
   }
 
+  private async createProviderAccessToken(
+    consultation: ConsultationRecord,
+    participantRole: ParticipantRole,
+    viewerUserId: string,
+  ): Promise<ProviderAccess> {
+    if (consultation.meetingProvider === "livekit") {
+      return this.createLiveKitAccessToken(consultation, participantRole, viewerUserId);
+    }
+
+    return this.createMockAccessToken(consultation, participantRole, viewerUserId);
+  }
+
+  private async createMockAccessToken(
+    consultation: ConsultationRecord,
+    participantRole: ParticipantRole,
+    viewerUserId: string,
+  ): Promise<ProviderAccess> {
+    const ttl = Number(this.configService.get<string>("VIDEO_ACCESS_TTL", "900"));
+    const issuedAt = DateTime.utc();
+    const expiresAt = issuedAt.plus({ seconds: ttl });
+    const accessToken = await this.jwtService.signAsync<VideoAccessTokenPayload>(
+      {
+        sub: viewerUserId,
+        consultationId: consultation.id,
+        roomId: consultation.meetingRoomId!,
+        participantRole,
+        tokenType: "video_access",
+      },
+      {
+        secret: this.videoAccessSecret(),
+        expiresIn: ttl,
+      },
+    );
+
+    return {
+      accessToken,
+      issuedAt: issuedAt.toISO()!,
+      expiresAt: expiresAt.toISO()!,
+      expiresInSec: ttl,
+      providerServerUrl: null,
+    };
+  }
+
+  private async createLiveKitAccessToken(
+    consultation: ConsultationRecord,
+    participantRole: ParticipantRole,
+    viewerUserId: string,
+  ): Promise<ProviderAccess> {
+    const wsUrl = this.liveKitWsUrl();
+    const ttl = Number(this.configService.get<string>("VIDEO_ACCESS_TTL", "900"));
+    const issuedAt = DateTime.utc();
+    const expiresAt = issuedAt.plus({ seconds: ttl });
+    const token = new AccessToken(
+      this.configService.getOrThrow<string>("LIVEKIT_API_KEY"),
+      this.configService.getOrThrow<string>("LIVEKIT_API_SECRET"),
+      {
+        identity: `${participantRole}:${viewerUserId}`,
+        name: participantRole === "client" ? "Клиент" : "Психолог",
+        ttl: `${ttl}s`,
+        metadata: JSON.stringify({
+          consultationId: consultation.id,
+          participantRole,
+          userId: viewerUserId,
+        }),
+      },
+    );
+
+    token.addGrant({
+      roomJoin: true,
+      room: consultation.meetingRoomId!,
+      canPublish: true,
+      canPublishData: true,
+      canSubscribe: true,
+    });
+
+    return {
+      accessToken: await token.toJwt(),
+      issuedAt: issuedAt.toISO()!,
+      expiresAt: expiresAt.toISO()!,
+      expiresInSec: ttl,
+      providerServerUrl: wsUrl,
+    };
+  }
+
   private videoAccessSecret() {
     return (
       this.configService.get<string>("VIDEO_ACCESS_SECRET") ??
       this.configService.getOrThrow<string>("JWT_ACCESS_SECRET")
     );
+  }
+
+  private desiredProvider() {
+    const provider = this.configService.get<string>("VIDEO_PROVIDER", "mock_video").trim().toLowerCase();
+    return provider === "livekit" ? "livekit" : "mock_video";
+  }
+
+  private liveKitRoomName(consultationId: string) {
+    const prefix = this.configService.get<string>("LIVEKIT_ROOM_PREFIX", "consultation").trim() || "consultation";
+    return `${prefix}-${consultationId}`;
+  }
+
+  private liveKitWsUrl() {
+    const url = this.liveKitWsUrlOrNull();
+
+    if (!url) {
+      throw new ConflictException("LiveKit не настроен: отсутствует LIVEKIT_WS_URL");
+    }
+
+    return url;
+  }
+
+  private liveKitWsUrlOrNull() {
+    return this.configService.get<string>("LIVEKIT_WS_URL")?.trim() || null;
   }
 }

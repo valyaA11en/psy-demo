@@ -462,6 +462,9 @@ export type SessionInfo = {
   endsAt: string;
   paymentStatus: string;
   joinUrl: string | null;
+  providerConnection: {
+    serverUrl: string | null;
+  };
   accessWindow: {
     opensAt: string;
     closesAt: string;
@@ -484,6 +487,7 @@ export type VideoAccessPayload = {
   issuedAt: string;
   expiresAt: string;
   expiresInSec: number;
+  providerServerUrl: string | null;
   joinUrl: string;
 };
 

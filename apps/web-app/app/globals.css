@@ -642,6 +642,12 @@ main {
   color: var(--accent-strong);
 }
 
+.livekit-shell {
+  min-height: 70vh;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+}
+
 @media (max-width: 1080px) {
   .filters-grid,
   .meta-grid,

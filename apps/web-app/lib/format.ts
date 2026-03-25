@@ -119,6 +119,7 @@ export function humanizeCode(value: string | null | undefined) {
     public: "публичный",
     payment_required: "требуется оплата",
     mock_video: "тестовый провайдер",
+    livekit: "livekit",
     ru: "русский",
     en: "английский",
     "booking.created": "создано бронирование",
