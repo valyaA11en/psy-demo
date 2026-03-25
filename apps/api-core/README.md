@@ -4,22 +4,36 @@
 
 ## Что реализовано
 
-- регистрация, вход, refresh token rotation, logout и logout-all
+- регистрация и вход
+- подтверждение email перед первой сессией
+- refresh token rotation
+- logout и logout-all
 - JWT auth, RBAC и audit log
 - публичный каталог психологов
 - профили психологов и специализации
 - weekly availability rules, blackout periods и appointment slots
 - booking flow с idempotency key
-- mock payments
-- video session access flow
+- reviews после завершённой консультации
+- complaints по конкретной консультации
 - notifications, notification preferences и Telegram linking
-- Redis queue publishing для `notification-worker` и `booking-slot-worker`
+- mock payments
+- mock video session access
+- Redis queue publishing для workers
 - realtime event publishing для `ws-gateway`
+
+## Auth lifecycle
+
+1. `POST /api/v1/auth/register` создаёт пользователя со статусом `pending`
+2. API создаёт одноразовый email verification token и ставит email в очередь уведомлений
+3. `POST /api/v1/auth/verify-email` активирует пользователя и создаёт auth session
+4. `POST /api/v1/auth/resend-verification` перевыпускает письмо без раскрытия, существует ли аккаунт
+5. `POST /api/v1/auth/login` разрешён только после подтверждения email
 
 ## Основные endpoints
 
-- `GET /api/v1/health`
 - `POST /api/v1/auth/register`
+- `POST /api/v1/auth/verify-email`
+- `POST /api/v1/auth/resend-verification`
 - `POST /api/v1/auth/login`
 - `POST /api/v1/auth/refresh`
 - `POST /api/v1/auth/logout`
@@ -53,6 +67,10 @@
 - `GET /api/v1/bookings/:id`
 - `POST /api/v1/bookings/:id/cancel`
 - `POST /api/v1/bookings/:id/complete`
+- `GET /api/v1/reviews/psychologists/:slug`
+- `POST /api/v1/reviews`
+- `GET /api/v1/complaints/me`
+- `POST /api/v1/complaints`
 - `POST /api/v1/payments`
 - `GET /api/v1/payments/me`
 - `GET /api/v1/payments/:id`
@@ -70,15 +88,32 @@
 
 ## Локальный запуск
 
+### Рекомендуемый контейнерный путь
+
+```bash
+docker compose --env-file ../../.env.example up -d postgres redis
+docker compose --env-file ../../.env.example run --rm api-core npx prisma migrate deploy
+docker compose --env-file ../../.env.example run --rm api-core npm run prisma:seed
+docker compose --env-file ../../.env.example up --build api-core
+```
+
+Для demo seed:
+
+```bash
+docker compose --env-file ../../.env.example run --rm -e SEED_DEMO_DATA=true api-core npm run prisma:seed
+```
+
+### Хостовый путь
+
 1. Скопировать `.env.example` в `.env`
-2. Заполнить `DATABASE_URL` и JWT secrets
+2. Указать рабочий `DATABASE_URL`
 3. Выполнить:
 
 ```bash
 npm install
 npx prisma generate
-npx prisma migrate dev
-npx prisma db seed
+npx prisma migrate deploy
+npm run prisma:seed
 npm run start:dev
 ```
 
@@ -86,35 +121,24 @@ npm run start:dev
 
 - `SWAGGER_ENABLED=false`
 - `SEED_DEMO_DATA=false`
-- `THROTTLE_TTL=60`
-- `THROTTLE_LIMIT=20`
 - `AUTH_THROTTLE_TTL=60`
 - `AUTH_THROTTLE_LIMIT=5`
 - `WEBHOOK_THROTTLE_TTL=60`
 - `WEBHOOK_THROTTLE_LIMIT=15`
+- `EMAIL_VERIFICATION_TTL_HOURS=24`
+- `AUTH_DEBUG_EMAIL_VERIFICATION_LINKS=false`
 - `WEBHOOK_SIGNING_SECRET=...`
+- `SESSION_REVOCATION_CHANNEL=consultations.session-revoked.v1`
+- `SESSION_REVOCATION_KEY_PREFIX=consultations:session-revoked:v1:`
 - `BOOKING_SLOT_QUEUE_KEY=consultations.booking-slots.v1`
 - `NOTIFICATION_QUEUE_KEY=consultations.notifications.v1`
 
-`/docs` доступен только если `SWAGGER_ENABLED=true`.
-
-## Demo seed
-
-Demo-данные выключены по умолчанию. Чтобы создать локальные demo-аккаунты и тестовые сущности, запускайте seed с `SEED_DEMO_DATA=true`.
-
-Локальный набор demo-аккаунтов:
-
-- `admin@example.com / Admin12345!`
-- `psychologist@example.com / Psychologist123!`
-- `client@example.com / Client12345!`
-
-Не включайте этот режим на общем стенде или production-like окружении.
-
 ## Security notes
 
-- внутренний Telegram consume endpoint должен вызываться только через `telegram-link-webhook`
-- внешний доступ к `/api/v1/internal/*` режется на уровне `nginx`
-- админам намеренно не выдаются session links и video access tokens
-- refresh token хранится в `HttpOnly` cookie
-- throttling включён глобально через `@nestjs/throttler`
-- для `auth` и internal webhook используются отдельные более жёсткие throttle-профили
+- `/docs` доступен только если `SWAGGER_ENABLED=true` и `NODE_ENV !== production`
+- refresh token хранится в `HttpOnly` cookie с `SameSite=Strict`
+- для `auth` и internal webhook используются отдельные stricter throttle profiles
+- logout/logout-all публикуют session revocation в Redis
+- `ws-gateway` отклоняет revoked sessions и разрывает уже открытые socket connections
+- внутренние маршруты `/api/v1/internal/*` должны ходить только через доверенные backend-service flows
+- demo seed и debug verification links должны включаться только локально

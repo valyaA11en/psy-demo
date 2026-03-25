@@ -1,6 +1,6 @@
 # admin-panel
 
-Laravel backoffice для модерации и операционной поддержки платформы.
+Laravel backoffice для moderation и operational support платформы.
 
 ## Scope
 
@@ -23,7 +23,7 @@ php artisan key:generate
 php artisan serve --host=0.0.0.0 --port=9000
 ```
 
-Откройте:
+Открыть:
 
 - `http://localhost:9000/admin/login` при прямом запуске
 - `http://localhost/admin/login` при запуске через корневой `nginx`
@@ -40,13 +40,16 @@ php artisan serve --host=0.0.0.0 --port=9000
 - `DB_PASSWORD`
 - `SHOW_DEMO_CREDENTIALS=false`
 - `ADMIN_ALLOWED_IPS=127.0.0.1,::1`
+- `TRUSTED_PROXIES=127.0.0.1,::1,172.16.0.0/12`
 
 ## Security notes
 
-- доступ к `/admin` можно ограничить allowlist-ом через `ADMIN_ALLOWED_IPS`
-- админские сессии изолированы от публичного web-приложения
-- UI не показывает лишние чувствительные данные клиента
-- demo credentials в UI отображаются только если `SHOW_DEMO_CREDENTIALS=true`
+- доступ к `/admin` ограничивается allowlist-ом через `ADMIN_ALLOWED_IPS`
+- IP определяется через `$request->ip()` после настройки trusted proxies, а не по сырому `X-Forwarded-For`
+- `POST /admin/login` защищён throttling `5/min`
+- `request_id` в audit logs генерируется на сервере, а не берётся из клиентского заголовка
+- demo credentials в UI показываются только если `SHOW_DEMO_CREDENTIALS=true`
+- админский интерфейс намеренно не показывает лишние чувствительные данные клиента
 
 ## Demo account
 
