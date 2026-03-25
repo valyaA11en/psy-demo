@@ -9,6 +9,7 @@ import { BookingComplaintPanel } from "@/components/booking-complaint-panel";
 import { BookingReviewPanel } from "@/components/booking-review-panel";
 import { NotificationPreferencesPanel } from "@/components/notification-preferences-panel";
 import { AppointmentSlotsPanel } from "@/components/appointment-slots-panel";
+import { PsychologistFilesPanel } from "@/components/psychologist-files-panel";
 import { useAuth } from "@/components/auth-provider";
 import { PaymentActions } from "@/components/payment-actions";
 import { formatCompactDateTime, formatDateRange, formatMoney, humanizeCode } from "@/lib/format";
@@ -21,12 +22,16 @@ import type {
   ComplaintListResponse,
   ComplaintRecord,
   DashboardBooking,
+  FileDownloadSession,
+  FileUploadSession,
+  FilesListResponse,
   MyAvailabilitySlotsResponse,
   NotificationListResponse,
   NotificationPreferences,
   NotificationRecord,
   PaymentListResponse,
   PaymentRecord,
+  PrivateFileRecord,
   RealtimeDomainEvent,
   TelegramLinkSession,
 } from "@/lib/types";
@@ -72,6 +77,27 @@ function buildAvailabilitySlotsQuery(filters: AvailabilitySlotFilters) {
   return searchParams.toString();
 }
 
+function resolveUploadMimeType(file: File) {
+  if (file.type.trim()) {
+    return file.type.trim().toLowerCase();
+  }
+
+  const normalizedName = file.name.toLowerCase();
+  if (normalizedName.endsWith(".pdf")) {
+    return "application/pdf";
+  }
+
+  if (normalizedName.endsWith(".png")) {
+    return "image/png";
+  }
+
+  if (normalizedName.endsWith(".webp")) {
+    return "image/webp";
+  }
+
+  return "image/jpeg";
+}
+
 export function DashboardClient() {
   const { ready, accessToken, user, request } = useAuth();
   const [profile, setProfile] = useState<AuthUser | null>(null);
@@ -83,6 +109,7 @@ export function DashboardClient() {
     createDefaultAvailabilitySlotFilters(),
   );
   const [availabilityExceptions, setAvailabilityExceptions] = useState<AvailabilityException[]>([]);
+  const [files, setFiles] = useState<PrivateFileRecord[]>([]);
   const [notificationPreferences, setNotificationPreferences] = useState<NotificationPreferences | null>(null);
   const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
   const [complaints, setComplaints] = useState<ComplaintRecord[]>([]);
@@ -119,6 +146,7 @@ export function DashboardClient() {
         setAvailabilityRules([]);
         setAvailabilitySlots([]);
         setAvailabilityExceptions([]);
+        setFiles([]);
         setNotificationPreferences(preferenceData);
         setNotifications(notificationData.items);
         setUnreadNotifications(notificationData.unreadCount);
@@ -128,7 +156,7 @@ export function DashboardClient() {
 
       if (user.roles.includes("psychologist")) {
         const slotQuery = buildAvailabilitySlotsQuery(availabilitySlotFilters);
-        const [bookingData, notificationData, exceptionData, ruleData, slotData, preferenceData, complaintData] =
+        const [bookingData, notificationData, exceptionData, ruleData, slotData, preferenceData, complaintData, fileData] =
           await Promise.all([
           request<BookingListResponse>("/bookings/psychologist/me"),
           request<NotificationListResponse>("/notifications/me?limit=6"),
@@ -137,12 +165,14 @@ export function DashboardClient() {
           request<MyAvailabilitySlotsResponse>(`/availability/me/slots?${slotQuery}`),
           request<NotificationPreferences>("/notifications/me/preferences"),
           request<ComplaintListResponse>("/complaints/me?limit=6"),
+          request<FilesListResponse>("/files/me?limit=12"),
         ]);
         setBookings(bookingData.items);
         setPayments([]);
         setAvailabilityRules(ruleData);
         setAvailabilitySlots(slotData.items);
         setAvailabilityExceptions(exceptionData);
+        setFiles(fileData.items);
         setNotificationPreferences(preferenceData);
         setNotifications(notificationData.items);
         setUnreadNotifications(notificationData.unreadCount);
@@ -155,6 +185,7 @@ export function DashboardClient() {
       setAvailabilityRules([]);
       setAvailabilitySlots([]);
       setAvailabilityExceptions([]);
+      setFiles([]);
       setComplaints([]);
       const [notificationData, preferenceData] = await Promise.all([
         request<NotificationListResponse>("/notifications/me?limit=6"),
@@ -331,6 +362,46 @@ export function DashboardClient() {
     await loadData();
   }
 
+  async function uploadPsychologistFile(purpose: string, file: File) {
+    const uploadSession = await request<FileUploadSession>("/files/upload-url", {
+      method: "POST",
+      body: JSON.stringify({
+        purpose,
+        originalFilename: file.name,
+        mimeType: resolveUploadMimeType(file),
+        sizeBytes: file.size,
+      }),
+    });
+
+    const uploadResponse = await fetch(uploadSession.upload.url, {
+      method: uploadSession.upload.method,
+      headers: uploadSession.upload.headers,
+      body: file,
+    });
+
+    if (!uploadResponse.ok) {
+      throw new Error("S3 upload не завершился успешно");
+    }
+
+    await request<PrivateFileRecord>(`/files/${uploadSession.file.id}/complete`, {
+      method: "POST",
+    });
+
+    await loadData();
+  }
+
+  async function downloadPsychologistFile(fileId: string) {
+    const downloadSession = await request<FileDownloadSession>(`/files/${fileId}/download-url`);
+    window.open(downloadSession.url, "_blank", "noopener,noreferrer");
+  }
+
+  async function deletePsychologistFile(fileId: string) {
+    await request<{ id: string; deleted: boolean }>(`/files/${fileId}`, {
+      method: "DELETE",
+    });
+    await loadData();
+  }
+
   useEffect(() => {
     if (!ready || !user) {
       return;
@@ -470,6 +541,12 @@ export function DashboardClient() {
                   onFiltersChange={setAvailabilitySlotFilters}
                   onGenerate={generateAvailabilitySlots}
                   slots={availabilitySlots}
+                />
+                <PsychologistFilesPanel
+                  files={files}
+                  onDelete={deletePsychologistFile}
+                  onDownload={downloadPsychologistFile}
+                  onUpload={uploadPsychologistFile}
                 />
               </>
             ) : null}

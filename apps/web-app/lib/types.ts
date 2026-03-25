@@ -124,6 +124,46 @@ export type AvailabilityException = {
   updatedAt: string;
 };
 
+export type PrivateFileRecord = {
+  id: string;
+  purpose: string;
+  originalFilename: string | null;
+  mimeType: string;
+  sizeBytes: number;
+  status: string;
+  visibility: string;
+  createdAt: string;
+  uploadedAt: string | null;
+  deletedAt: string | null;
+  canDownload: boolean;
+};
+
+export type FilesListResponse = {
+  items: PrivateFileRecord[];
+  pagination: Pagination;
+  filters: {
+    purpose: string | null;
+    status: string | null;
+  };
+};
+
+export type FileUploadSession = {
+  file: PrivateFileRecord;
+  upload: {
+    method: "PUT";
+    url: string;
+    headers: Record<string, string>;
+    expiresAt: string;
+    expiresInSec: number;
+  };
+};
+
+export type FileDownloadSession = {
+  url: string;
+  expiresAt: string;
+  expiresInSec: number;
+};
+
 export type PublicSlotsResponse = {
   psychologist: {
     id: string;

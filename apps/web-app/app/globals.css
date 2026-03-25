@@ -375,6 +375,10 @@ main {
   min-height: 50px;
 }
 
+.file-input {
+  padding: 12px 14px;
+}
+
 .field-textarea {
   min-height: 110px;
   resize: vertical;

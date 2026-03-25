@@ -86,6 +86,12 @@ enum FileVisibility {
   public
 }
 
+enum FileStatus {
+  pending
+  uploaded
+  deleted
+}
+
 model User {
   id                        String                      @id @default(uuid()) @db.Uuid
   email                     String                      @unique @db.VarChar(255)
@@ -117,6 +123,7 @@ model User {
   complaintsTarget          Complaint[]                 @relation("ComplaintTarget")
   complaintsAssigned        Complaint[]                 @relation("ComplaintAssignedAdmin")
   moderatedPsychologists    PsychologistProfile[]       @relation("PsychologistModerator")
+  filesOwned                File[]                      @relation("FileOwner")
 
   @@map("users")
 }
@@ -541,15 +548,21 @@ model File {
   psychologistProfileId String?              @map("psychologist_profile_id") @db.Uuid
   bucket                String               @db.VarChar(128)
   objectKey             String               @unique @map("object_key") @db.VarChar(512)
+  originalFilename      String?              @map("original_filename") @db.VarChar(255)
   purpose               String               @db.VarChar(128)
   mimeType              String               @map("mime_type") @db.VarChar(128)
   sizeBytes             Int                  @map("size_bytes")
+  status                FileStatus           @default(pending)
   visibility            FileVisibility       @default(private)
   checksum              String?              @db.VarChar(255)
-  uploadedAt            DateTime             @default(now()) @map("uploaded_at") @db.Timestamptz(6)
+  createdAt             DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  uploadedAt            DateTime?            @map("uploaded_at") @db.Timestamptz(6)
+  deletedAt             DateTime?            @map("deleted_at") @db.Timestamptz(6)
+  owner                 User                 @relation("FileOwner", fields: [ownerUserId], references: [id], onDelete: Cascade)
   psychologistProfile   PsychologistProfile? @relation(fields: [psychologistProfileId], references: [userId], onDelete: SetNull)
 
   @@index([ownerUserId])
+  @@index([ownerUserId, status])
   @@index([purpose])
   @@map("files")
 }

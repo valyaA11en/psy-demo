@@ -12,6 +12,7 @@ import { createThrottlerOptions } from "./common/throttle/throttle.config";
 import { HttpExceptionFilter } from "./common/filters/http-exception.filter";
 import { RolesGuard } from "./common/guards/roles.guard";
 import { ResponseEnvelopeInterceptor } from "./common/interceptors/response-envelope.interceptor";
+import { FilesModule } from "./files/files.module";
 import { HealthModule } from "./health/health.module";
 import { NotificationsModule } from "./notifications/notifications.module";
 import { PaymentsModule } from "./payments/payments.module";
@@ -39,6 +40,7 @@ import { VideoSessionsModule } from "./video-sessions/video-sessions.module";
     HealthModule,
     AuthModule,
     NotificationsModule,
+    FilesModule,
     AvailabilityModule,
     BookingsModule,
     ComplaintsModule,

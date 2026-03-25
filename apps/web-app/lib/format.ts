@@ -40,6 +40,22 @@ export function formatCompactDateTime(value: string | null | undefined) {
   return shortDateFormatter.format(new Date(value));
 }
 
+export function formatFileSize(sizeBytes: number | null | undefined) {
+  if (typeof sizeBytes !== "number" || Number.isNaN(sizeBytes) || sizeBytes < 0) {
+    return "неизвестный размер";
+  }
+
+  if (sizeBytes < 1024) {
+    return `${sizeBytes} Б`;
+  }
+
+  if (sizeBytes < 1024 * 1024) {
+    return `${(sizeBytes / 1024).toFixed(1)} КБ`;
+  }
+
+  return `${(sizeBytes / (1024 * 1024)).toFixed(1)} МБ`;
+}
+
 export function formatDateRange(start: string, end: string) {
   const startDate = new Date(start);
   const endDate = new Date(end);
@@ -64,7 +80,7 @@ export function humanizeCode(value: string | null | undefined) {
     held: "в резерве",
     booked: "забронирован",
     blocked: "заблокирован",
-    cancelled: "отменён",
+    cancelled: "отменен",
     scheduled: "запланирована",
     completed: "завершена",
     new: "новая",
@@ -77,7 +93,7 @@ export function humanizeCode(value: string | null | undefined) {
     draft: "черновик",
     pending_review: "на модерации",
     approved: "одобрен",
-    rejected: "отклонён",
+    rejected: "отклонен",
     published: "опубликован",
     hidden: "скрыт",
     online: "онлайн",
@@ -86,7 +102,7 @@ export function humanizeCode(value: string | null | undefined) {
     connecting: "подключение",
     connected: "подключено",
     consultation: "консультация",
-    payment: "платёж",
+    payment: "платеж",
     video_session: "видеосессия",
     booking: "бронирование",
     in_app: "в приложении",
@@ -95,6 +111,10 @@ export function humanizeCode(value: string | null | undefined) {
     processing: "обрабатывается",
     sent: "доставлено",
     paid: "оплачен",
+    uploaded: "загружен",
+    deleted: "удален",
+    private: "приватный",
+    public: "публичный",
     payment_required: "требуется оплата",
     mock_video: "тестовый провайдер",
     ru: "русский",
@@ -102,11 +122,11 @@ export function humanizeCode(value: string | null | undefined) {
     "booking.created": "создано бронирование",
     "booking.cancelled": "бронирование отменено",
     "booking.completed": "консультация завершена",
-    "payment.created": "создан платёж",
-    "payment.succeeded": "платёж подтверждён",
-    "payment.failed": "платёж отклонён",
-    "payment.cancelled": "платёж отменён",
-    "payment.updated": "обновлён платёж",
+    "payment.created": "создан платеж",
+    "payment.succeeded": "платеж подтвержден",
+    "payment.failed": "платеж отклонен",
+    "payment.cancelled": "платеж отменен",
+    "payment.updated": "обновлен платеж",
     "review.created": "создан отзыв",
     "complaint.created": "создана жалоба",
     "video.session_ready": "видеосессия готова",
@@ -117,6 +137,11 @@ export function humanizeCode(value: string | null | undefined) {
     abuse: "некорректное поведение",
     billing: "оплата",
     other: "другое",
+    psychologist_verification_document: "документ для верификации",
+    psychologist_certificate: "сертификат",
+    psychologist_diploma: "диплом",
+    psychologist_additional_document: "дополнительный документ",
+    psychologist_public_photo: "публичное фото",
   };
 
   Object.assign(dictionary, {
