@@ -52,9 +52,14 @@ class User extends Model
         return $this->hasOne(PsychologistProfile::class, 'user_id', 'id');
     }
 
+    public function twoFactorCredential(): HasOne
+    {
+        return $this->hasOne(UserTwoFactorCredential::class, 'user_id', 'id');
+    }
+
     public function scopeWithAdminRelations(Builder $query): Builder
     {
-        return $query->with(['roles', 'clientProfile', 'psychologistProfile']);
+        return $query->with(['roles', 'clientProfile', 'psychologistProfile', 'twoFactorCredential']);
     }
 
     public function isAdmin(): bool
@@ -93,5 +98,12 @@ class User extends Model
         }
 
         return $this->email;
+    }
+
+    public function isTwoFactorProtected(): bool
+    {
+        return $this->is_2fa_enabled
+            && $this->twoFactorCredential !== null
+            && $this->twoFactorCredential->enabled_at !== null;
     }
 }

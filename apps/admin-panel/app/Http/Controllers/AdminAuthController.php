@@ -48,6 +48,21 @@ class AdminAuthController extends Controller
                 ]);
         }
 
+        if ($user->isTwoFactorProtected()) {
+            $this->adminSession->beginTwoFactorChallenge($request, $user);
+
+            $this->auditLogger->log(
+                $user,
+                'admin.auth.login_challenge_started',
+                'user',
+                $user->id,
+                ['roles' => $user->roles->pluck('code')->all()],
+                $request,
+            );
+
+            return redirect()->route('admin.2fa.challenge');
+        }
+
         $this->adminSession->login($request, $user);
         $this->auditLogger->log(
             $user,

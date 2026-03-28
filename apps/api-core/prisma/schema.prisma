@@ -124,6 +124,7 @@ model User {
   complaintsAssigned        Complaint[]                 @relation("ComplaintAssignedAdmin")
   moderatedPsychologists    PsychologistProfile[]       @relation("PsychologistModerator")
   filesOwned                File[]                      @relation("FileOwner")
+  twoFactorCredential       UserTwoFactorCredential?
 
   @@map("users")
 }
@@ -565,4 +566,16 @@ model File {
   @@index([ownerUserId, status])
   @@index([purpose])
   @@map("files")
+}
+
+model UserTwoFactorCredential {
+  userId              String   @id @map("user_id") @db.Uuid
+  totpSecretEncrypted String   @map("totp_secret_encrypted")
+  recoveryCodesJson   Json     @map("recovery_codes_json")
+  enabledAt           DateTime @map("enabled_at") @db.Timestamptz(6)
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_two_factor_credentials")
 }

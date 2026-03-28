@@ -205,7 +205,7 @@ describe("NotificationsService", () => {
           telegramChatId: null,
         }),
       ]);
-      mockPrisma.notification.findUnique.mockResolvedValue(null);
+      mockPrisma.notification.findMany.mockResolvedValue([]);
       mockPrisma.notification.create.mockResolvedValue({ id: "notif-1" });
 
       const result = await service.createQueuedNotifications([
@@ -244,14 +244,21 @@ describe("NotificationsService", () => {
       ]);
 
       expect(result).toEqual(["notif-1"]);
-      expect(mockPrisma.notification.findUnique).toHaveBeenCalledTimes(1);
+      expect(mockPrisma.notification.findMany).toHaveBeenCalledTimes(1);
       expect(mockPrisma.notification.create).toHaveBeenCalledTimes(1);
       expect(mockQueue.enqueueMany).toHaveBeenCalledWith(["notif-1"]);
     });
 
     it("skips duplicate notifications by dedup key", async () => {
       mockPrisma.notificationPreference.findMany.mockResolvedValue([]);
-      mockPrisma.notification.findUnique.mockResolvedValue({ id: "existing-1" });
+      mockPrisma.notification.findMany.mockResolvedValue([
+        {
+          id: "existing-1",
+          userId: "user-1",
+          channel: NotificationChannel.in_app,
+          dedupKey: "dup-1",
+        },
+      ]);
 
       const result = await service.createQueuedNotifications([
         {

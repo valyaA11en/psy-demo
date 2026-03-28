@@ -12,6 +12,8 @@ import { NotificationsService } from "../notifications/notifications.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { AuthService } from "./auth.service";
 import { SessionRevocationService } from "./session-revocation.service";
+import { TwoFactorService } from "./two-factor.service";
+import { TwoFactorStateService } from "./two-factor-state.service";
 
 const makeUser = (overrides: Partial<any> = {}) => ({
   id: "user-1",
@@ -20,11 +22,13 @@ const makeUser = (overrides: Partial<any> = {}) => ({
   status: UserStatus.active,
   emailVerifiedAt: new Date(),
   lastLoginAt: null,
+  is2faEnabled: false,
   createdAt: new Date(),
   updatedAt: new Date(),
   roles: [{ role: { id: "role-1", code: "client" } }],
   clientProfile: { userId: "user-1", displayName: "Test User", timezone: "UTC" },
   psychologistProfile: null,
+  twoFactorCredential: null,
   ...overrides,
 });
 
@@ -58,6 +62,11 @@ const mockPrisma = {
     update: jest.fn(),
     updateMany: jest.fn(),
   },
+  userTwoFactorCredential: {
+    update: jest.fn(),
+    upsert: jest.fn(),
+    delete: jest.fn(),
+  },
   emailVerificationToken: {
     create: jest.fn(),
     findUnique: jest.fn(),
@@ -89,6 +98,32 @@ const mockSessionRevocation = {
   revokeMany: jest.fn().mockResolvedValue(true),
 };
 
+const mockTwoFactor = {
+  generateSecret: jest.fn().mockReturnValue("ABCDEFGHIJKLMNOPQRSTUV"),
+  formatSecretForDisplay: jest.fn().mockReturnValue("ABCD EFGH IJKL MNOP QRST UV"),
+  buildOtpAuthUri: jest.fn().mockReturnValue("otpauth://totp/Consultations:test@example.com"),
+  issuer: jest.fn().mockReturnValue("Consultations"),
+  verifyTotp: jest.fn().mockReturnValue(true),
+  decryptSecret: jest.fn().mockReturnValue("ABCDEFGHIJKLMNOPQRSTUV"),
+  generateRecoveryCodes: jest.fn().mockReturnValue(["ABCD-EFGH", "JKLM-NPQR"]),
+  hashRecoveryCode: jest.fn((code: string) => `hash:${code}`),
+  encryptSecret: jest.fn().mockReturnValue("encrypted-secret"),
+};
+
+const mockTwoFactorState = {
+  createLoginChallenge: jest.fn().mockResolvedValue({
+    token: "challenge-token",
+    expiresAt: new Date(Date.now() + 600_000),
+  }),
+  getLoginChallenge: jest.fn(),
+  deleteLoginChallenge: jest.fn().mockResolvedValue(undefined),
+  storePendingSetup: jest.fn().mockResolvedValue({
+    expiresAt: new Date(Date.now() + 600_000),
+  }),
+  getPendingSetup: jest.fn(),
+  clearPendingSetup: jest.fn().mockResolvedValue(undefined),
+};
+
 describe("AuthService", () => {
   let service: AuthService;
 
@@ -104,6 +139,8 @@ describe("AuthService", () => {
         { provide: AuditService, useValue: mockAudit },
         { provide: NotificationsService, useValue: mockNotifications },
         { provide: SessionRevocationService, useValue: mockSessionRevocation },
+        { provide: TwoFactorService, useValue: mockTwoFactor },
+        { provide: TwoFactorStateService, useValue: mockTwoFactorState },
       ],
     }).compile();
 
@@ -268,10 +305,82 @@ describe("AuthService", () => {
       const result = await service.login(dto, makeRequest(), makeResponse() as any);
 
       expect(result).toHaveProperty("accessToken", "signed-token");
+      if (!("accessToken" in result)) {
+        throw new Error("Expected auth session payload");
+      }
       expect(result.user).toHaveProperty("email", "test@example.com");
       expect(mockAudit.log).toHaveBeenCalledWith(
         expect.objectContaining({ action: "auth.login" }),
       );
+    });
+
+    it("returns two-factor challenge when 2fa is enabled", async () => {
+      const bcrypt = await import("bcryptjs");
+      const hash = await bcrypt.hash("password", 1);
+      const user = makeUser({
+        passwordHash: hash,
+        is2faEnabled: true,
+        twoFactorCredential: {
+          enabledAt: new Date(),
+        },
+      });
+
+      mockPrisma.user.findUnique.mockResolvedValue(user);
+
+      const result = await service.login(dto, makeRequest(), makeResponse() as any);
+
+      expect(result).toMatchObject({
+        requiresTwoFactor: true,
+        challengeToken: "challenge-token",
+      });
+      expect(mockTwoFactorState.createLoginChallenge).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: "user-1",
+        }),
+      );
+      expect(mockPrisma.refreshToken.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("verifyTwoFactorLogin", () => {
+    it("verifies challenge and returns a session", async () => {
+      mockTwoFactorState.getLoginChallenge.mockResolvedValue({
+        userId: "user-1",
+        expiresAt: new Date(Date.now() + 600_000).toISOString(),
+      });
+      mockPrisma.user.findUnique.mockResolvedValue(
+        makeUser({
+          is2faEnabled: true,
+          twoFactorCredential: {
+            userId: "user-1",
+            totpSecretEncrypted: "encrypted-secret",
+            recoveryCodesJson: ["hash:ABCD-EFGH"],
+            enabledAt: new Date(),
+          },
+        }),
+      );
+      mockPrisma.user.update.mockResolvedValue(
+        makeUser({
+          is2faEnabled: true,
+          twoFactorCredential: {
+            enabledAt: new Date(),
+          },
+        }),
+      );
+      mockPrisma.refreshToken.create.mockResolvedValue({});
+
+      const result = await service.verifyTwoFactorLogin(
+        {
+          challengeToken: "challenge-token",
+          code: "123456",
+        } as any,
+        makeRequest(),
+        makeResponse() as any,
+      );
+
+      expect(result).toHaveProperty("accessToken");
+      expect(mockTwoFactor.verifyTotp).toHaveBeenCalled();
+      expect(mockTwoFactorState.deleteLoginChallenge).toHaveBeenCalledWith("challenge-token");
     });
   });
 

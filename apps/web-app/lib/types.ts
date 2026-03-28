@@ -213,6 +213,7 @@ export type AuthUser = {
   email: string;
   status: string;
   roles: string[];
+  twoFactorEnabled?: boolean;
   clientProfile?: {
     displayName?: string | null;
     timezone?: string | null;
@@ -230,6 +231,15 @@ export type AuthSessionPayload = {
   accessToken: string;
   user: AuthUser;
 };
+
+export type LoginTwoFactorChallenge = {
+  requiresTwoFactor: true;
+  challengeToken: string;
+  challengeExpiresAt: string;
+  methods: string[];
+};
+
+export type AuthLoginResult = AuthSessionPayload | LoginTwoFactorChallenge;
 
 export type RegisterResult = {
   success: true;
@@ -410,6 +420,35 @@ export type TelegramLinkSession = {
   deepLink: string;
   tokenExpiresAt: string;
   expiresInSec: number;
+};
+
+export type TwoFactorStatus = {
+  enabled: boolean;
+  enabledAt: string | null;
+  recoveryCodesRemaining: number;
+  pendingSetup: boolean;
+  pendingSetupExpiresAt: string | null;
+};
+
+export type TwoFactorSetupSession = {
+  manualEntryKey: string;
+  manualEntryKeyDisplay: string;
+  otpauthUri: string;
+  issuer: string;
+  accountLabel: string;
+  expiresAt: string;
+};
+
+export type TwoFactorEnableResult = {
+  success: true;
+  enabledAt: string;
+  recoveryCodes: string[];
+  recoveryCodesCount: number;
+};
+
+export type TwoFactorDisableResult = {
+  success: true;
+  revokedSessions: number;
 };
 
 export type NotificationListResponse = {

@@ -19,9 +19,14 @@ describe("AuthController throttling", () => {
         id: "user-1",
       },
     }),
+    verifyTwoFactorLogin: jest.fn(),
     refresh: jest.fn(),
     logout: jest.fn(),
     logoutAll: jest.fn(),
+    getTwoFactorStatus: jest.fn(),
+    startTwoFactorSetup: jest.fn(),
+    enableTwoFactor: jest.fn(),
+    disableTwoFactor: jest.fn(),
   };
 
   const mockConfigService = {

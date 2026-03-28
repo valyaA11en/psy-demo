@@ -22,6 +22,11 @@ export class UsersService {
           },
         },
         clientProfile: true,
+        twoFactorCredential: {
+          select: {
+            enabledAt: true,
+          },
+        },
         psychologistProfile: {
           include: {
             specializations: {
@@ -183,6 +188,7 @@ export class UsersService {
       email: user.email,
       status: user.status,
       roles: user.roles.map((item) => item.role.code),
+      twoFactorEnabled: Boolean(user.is2faEnabled && user.twoFactorCredential?.enabledAt),
       clientProfile: user.clientProfile,
       psychologistProfile: user.psychologistProfile
         ? {
@@ -226,6 +232,11 @@ export class UsersService {
           },
         },
         clientProfile: true,
+        twoFactorCredential: {
+          select: {
+            enabledAt: true,
+          },
+        },
         psychologistProfile: {
           include: {
             specializations: {

@@ -5,7 +5,7 @@
         <div>
             <p class="small">приватный backoffice</p>
             <h1 style="margin: 8px 0 0; font-size: 2rem;">Вход администратора</h1>
-            <p class="small" style="margin-top: 10px;">Доступ открыт только активным пользователям с ролью admin или superadmin.</p>
+            <p class="small" style="margin-top: 10px;">Доступ открыт только активным пользователям с ролью `admin` или `superadmin`. Если для аккаунта включена 2FA, после пароля будет запрошен TOTP-код.</p>
         </div>
 
         <form action="{{ route('login.store') }}" method="post" style="display: flex; flex-direction: column; gap: 16px;">

@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AdminAuthController;
+use App\Http\Controllers\AdminTwoFactorController;
 use App\Http\Controllers\AuditLogController;
 use App\Http\Controllers\ComplaintController;
 use App\Http\Controllers\DashboardController;
@@ -20,11 +21,23 @@ Route::prefix('admin')->middleware('admin.ip')->group(function (): void {
         Route::post('/login', [AdminAuthController::class, 'store'])
             ->middleware('throttle:5,1')
             ->name('login.store');
+
+        Route::middleware('admin.2fa.pending')->group(function (): void {
+            Route::get('/2fa/challenge', [AdminTwoFactorController::class, 'challenge'])->name('admin.2fa.challenge');
+            Route::post('/2fa/challenge', [AdminTwoFactorController::class, 'verifyChallenge'])
+                ->middleware('throttle:10,1')
+                ->name('admin.2fa.verify');
+        });
     });
 
     Route::middleware('admin.auth')->group(function (): void {
         Route::get('/', DashboardController::class)->name('admin.dashboard');
         Route::post('/logout', [AdminAuthController::class, 'destroy'])->name('logout');
+
+        Route::get('/security/2fa', [AdminTwoFactorController::class, 'security'])->name('admin.security.2fa');
+        Route::post('/security/2fa/setup', [AdminTwoFactorController::class, 'beginSetup'])->name('admin.security.2fa.setup');
+        Route::post('/security/2fa/enable', [AdminTwoFactorController::class, 'enable'])->name('admin.security.2fa.enable');
+        Route::post('/security/2fa/disable', [AdminTwoFactorController::class, 'disable'])->name('admin.security.2fa.disable');
 
         Route::get('/users', [UserController::class, 'index'])->name('admin.users.index');
         Route::patch('/users/{user}/status', [UserController::class, 'updateStatus'])->name('admin.users.status');

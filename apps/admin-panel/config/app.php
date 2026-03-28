@@ -127,4 +127,10 @@ return [
 
     'admin_allowed_ips' => env('ADMIN_ALLOWED_IPS', ''),
 
+    'admin_2fa_issuer' => env('ADMIN_2FA_ISSUER', env('APP_NAME', 'ConsultationsAdmin')),
+
+    'admin_2fa_encryption_key' => env('ADMIN_2FA_ENCRYPTION_KEY', env('APP_KEY')),
+
+    'admin_2fa_recovery_pepper' => env('ADMIN_2FA_RECOVERY_PEPPER', env('APP_KEY')),
+
 ];

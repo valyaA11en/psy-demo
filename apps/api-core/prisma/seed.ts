@@ -69,13 +69,13 @@ async function main() {
     where: { email: "admin@example.com" },
     update: {
       status: UserStatus.active,
-      is2faEnabled: true,
+      is2faEnabled: false,
     },
     create: {
       email: "admin@example.com",
       passwordHash: adminPassword,
       status: UserStatus.active,
-      is2faEnabled: true,
+      is2faEnabled: false,
       emailVerifiedAt: new Date(),
     },
   });

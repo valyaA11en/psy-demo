@@ -4,7 +4,9 @@ namespace App\Models\Concerns;
 
 trait UsesUuidPrimaryKey
 {
-    public $incrementing = false;
-
-    protected $keyType = 'string';
+    public function initializeUsesUuidPrimaryKey(): void
+    {
+        $this->incrementing = false;
+        $this->keyType = 'string';
+    }
 }

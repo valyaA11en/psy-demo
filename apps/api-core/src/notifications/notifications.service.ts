@@ -386,11 +386,11 @@ export class NotificationsService {
     });
 
     if (!notification) {
-      throw new NotFoundException("РЈРІРµРґРѕРјР»РµРЅРёРµ РЅРµ РЅР°Р№РґРµРЅРѕ");
+      throw new NotFoundException("Уведомление не найдено");
     }
 
     if (notification.userId !== userId) {
-      throw new ForbiddenException("РЈ РІР°СЃ РЅРµС‚ РґРѕСЃС‚СѓРїР° Рє СЌС‚РѕРјСѓ СѓРІРµРґРѕРјР»РµРЅРёСЋ");
+      throw new ForbiddenException("У вас нет доступа к этому уведомлению");
     }
 
     if (notification.readAt) {
@@ -444,6 +444,9 @@ export class NotificationsService {
       storedPreferences.map((preference) => [preference.userId, this.toEffectivePreferenceState(preference)]),
     );
 
+    const eligibleInputs: Array<CreateNotificationInput & { channel: NotificationChannel }> = [];
+    const batchDedupKeys = new Set<string>();
+
     for (const input of inputs) {
       const channel = input.channel ?? NotificationChannel.in_app;
       const preference =
@@ -453,59 +456,106 @@ export class NotificationsService {
         continue;
       }
 
-      const existing = await this.prisma.notification.findUnique({
-        where: {
-          userId_channel_dedupKey: {
-            userId: input.userId,
-            channel,
-            dedupKey: input.dedupKey,
-          },
-        },
-        select: {
-          id: true,
-        },
-      });
-
-      if (existing) {
+      const key = this.notificationBatchKey(input.userId, channel, input.dedupKey);
+      if (batchDedupKeys.has(key)) {
         continue;
       }
 
-      const created = await this.prisma.notification
-        .create({
-          data: {
-            userId: input.userId,
-            channel,
-            type: input.type,
-            title: input.title,
-            body: input.body,
-            dedupKey: input.dedupKey,
-            payloadJson:
-              input.payloadJson === undefined
-                ? undefined
-                : input.payloadJson === null
-                  ? Prisma.JsonNull
-                  : input.payloadJson,
-            status: NotificationStatus.queued,
-          },
-          select: {
-            id: true,
-          },
-        })
-        .catch((error: unknown) => {
-          if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-            return null;
-          }
+      batchDedupKeys.add(key);
+      eligibleInputs.push({
+        ...input,
+        channel,
+      });
+    }
 
-          throw error;
-        });
+    if (eligibleInputs.length === 0) {
+      await this.notificationQueueService.enqueueMany([]);
+      return [];
+    }
 
-      if (created) {
-        createdIds.push(created.id);
+    const existingNotifications = await this.prisma.notification.findMany({
+      where: {
+        OR: eligibleInputs.map((input) => ({
+          userId: input.userId,
+          channel: input.channel,
+          dedupKey: input.dedupKey,
+        })),
+      },
+      select: {
+        id: true,
+        userId: true,
+        channel: true,
+        dedupKey: true,
+      },
+    });
+
+    const existingKeys = new Set(
+      existingNotifications.map((item) =>
+        this.notificationBatchKey(item.userId, item.channel, item.dedupKey),
+      ),
+    );
+
+    const toCreate = eligibleInputs.filter(
+      (input) => !existingKeys.has(this.notificationBatchKey(input.userId, input.channel, input.dedupKey)),
+    );
+
+    for (const batch of this.chunk(toCreate, 25)) {
+      const createdBatch = await Promise.all(
+        batch.map((input) =>
+          this.prisma.notification
+            .create({
+              data: {
+                userId: input.userId,
+                channel: input.channel,
+                type: input.type,
+                title: input.title,
+                body: input.body,
+                dedupKey: input.dedupKey,
+                payloadJson:
+                  input.payloadJson === undefined
+                    ? undefined
+                    : input.payloadJson === null
+                      ? Prisma.JsonNull
+                      : input.payloadJson,
+                status: NotificationStatus.queued,
+              },
+              select: {
+                id: true,
+              },
+            })
+            .catch((error: unknown) => {
+              if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+                return null;
+              }
+
+              throw error;
+            }),
+        ),
+      );
+
+      for (const created of createdBatch) {
+        if (created) {
+          createdIds.push(created.id);
+        }
       }
     }
 
     await this.notificationQueueService.enqueueMany(createdIds);
     return createdIds;
+  }
+
+  private notificationBatchKey(userId: string, channel: NotificationChannel, dedupKey: string) {
+    return `${userId}:${channel}:${dedupKey}`;
+  }
+
+  private chunk<T>(items: T[], size: number) {
+    const result: T[][] = [];
+
+    for (let index = 0; index < items.length; index += size) {
+      result.push(items.slice(index, index + size));
+    }
+
+    return result;
   }
 
   private async getOrCreatePreference(userId: string) {

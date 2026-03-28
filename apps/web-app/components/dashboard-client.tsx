@@ -11,6 +11,7 @@ import { NotificationPreferencesPanel } from "@/components/notification-preferen
 import { AppointmentSlotsPanel } from "@/components/appointment-slots-panel";
 import { PsychologistFilesPanel } from "@/components/psychologist-files-panel";
 import { PsychologistProfilePanel } from "@/components/psychologist-profile-panel";
+import { TwoFactorSecurityPanel } from "@/components/two-factor-security-panel";
 import { useAuth } from "@/components/auth-provider";
 import { PaymentActions } from "@/components/payment-actions";
 import { formatCompactDateTime, formatDateRange, formatMoney, humanizeCode } from "@/lib/format";
@@ -37,6 +38,10 @@ import type {
   RealtimeDomainEvent,
   Specialization,
   TelegramLinkSession,
+  TwoFactorDisableResult,
+  TwoFactorEnableResult,
+  TwoFactorSetupSession,
+  TwoFactorStatus,
 } from "@/lib/types";
 
 type AvailabilitySlotFilters = {
@@ -116,6 +121,9 @@ export function DashboardClient() {
   const [psychologistWorkspaceProfile, setPsychologistWorkspaceProfile] = useState<PsychologistWorkspaceProfile | null>(null);
   const [specializationsCatalog, setSpecializationsCatalog] = useState<Specialization[]>([]);
   const [notificationPreferences, setNotificationPreferences] = useState<NotificationPreferences | null>(null);
+  const [twoFactorStatus, setTwoFactorStatus] = useState<TwoFactorStatus | null>(null);
+  const [twoFactorSetupSession, setTwoFactorSetupSession] = useState<TwoFactorSetupSession | null>(null);
+  const [twoFactorRecoveryCodes, setTwoFactorRecoveryCodes] = useState<string[]>([]);
   const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
   const [complaints, setComplaints] = useState<ComplaintRecord[]>([]);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
@@ -138,12 +146,13 @@ export function DashboardClient() {
       setProfile(profileData);
 
       if (user.roles.includes("client")) {
-        const [bookingData, paymentData, notificationData, preferenceData, complaintData] = await Promise.all([
+        const [bookingData, paymentData, notificationData, preferenceData, complaintData, twoFactorStatusData] = await Promise.all([
           request<BookingListResponse>("/bookings/me"),
           request<PaymentListResponse>("/payments/me"),
           request<NotificationListResponse>("/notifications/me?limit=6"),
           request<NotificationPreferences>("/notifications/me/preferences"),
           request<ComplaintListResponse>("/complaints/me?limit=6"),
+          request<TwoFactorStatus>("/auth/2fa"),
         ]);
 
         setBookings(bookingData.items);
@@ -155,15 +164,19 @@ export function DashboardClient() {
         setPsychologistWorkspaceProfile(null);
         setSpecializationsCatalog([]);
         setNotificationPreferences(preferenceData);
+        setTwoFactorStatus(twoFactorStatusData);
         setNotifications(notificationData.items);
         setUnreadNotifications(notificationData.unreadCount);
         setComplaints(complaintData.items);
+        if (!twoFactorStatusData.pendingSetup) {
+          setTwoFactorSetupSession(null);
+        }
         return;
       }
 
       if (user.roles.includes("psychologist")) {
         const slotQuery = buildAvailabilitySlotsQuery(availabilitySlotFilters);
-        const [bookingData, notificationData, exceptionData, ruleData, slotData, preferenceData, complaintData, fileData, psychologistProfileData, specializationsData] =
+        const [bookingData, notificationData, exceptionData, ruleData, slotData, preferenceData, complaintData, fileData, psychologistProfileData, specializationsData, twoFactorStatusData] =
           await Promise.all([
           request<BookingListResponse>("/bookings/psychologist/me"),
           request<NotificationListResponse>("/notifications/me?limit=6"),
@@ -175,6 +188,7 @@ export function DashboardClient() {
           request<FilesListResponse>("/files/me?limit=12"),
           request<PsychologistWorkspaceProfile>("/psychologists/me"),
           request<Specialization[]>("/catalog/specializations", undefined, { auth: false }),
+          request<TwoFactorStatus>("/auth/2fa"),
         ]);
         setBookings(bookingData.items);
         setPayments([]);
@@ -185,9 +199,13 @@ export function DashboardClient() {
         setPsychologistWorkspaceProfile(psychologistProfileData);
         setSpecializationsCatalog(specializationsData);
         setNotificationPreferences(preferenceData);
+        setTwoFactorStatus(twoFactorStatusData);
         setNotifications(notificationData.items);
         setUnreadNotifications(notificationData.unreadCount);
         setComplaints(complaintData.items);
+        if (!twoFactorStatusData.pendingSetup) {
+          setTwoFactorSetupSession(null);
+        }
         return;
       }
 
@@ -200,13 +218,18 @@ export function DashboardClient() {
       setPsychologistWorkspaceProfile(null);
       setSpecializationsCatalog([]);
       setComplaints([]);
-      const [notificationData, preferenceData] = await Promise.all([
+      const [notificationData, preferenceData, twoFactorStatusData] = await Promise.all([
         request<NotificationListResponse>("/notifications/me?limit=6"),
         request<NotificationPreferences>("/notifications/me/preferences"),
+        request<TwoFactorStatus>("/auth/2fa"),
       ]);
       setNotificationPreferences(preferenceData);
+      setTwoFactorStatus(twoFactorStatusData);
       setNotifications(notificationData.items);
       setUnreadNotifications(notificationData.unreadCount);
+      if (!twoFactorStatusData.pendingSetup) {
+        setTwoFactorSetupSession(null);
+      }
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "Не удалось загрузить кабинет");
     } finally {
@@ -288,6 +311,38 @@ export function DashboardClient() {
     return request<TelegramLinkSession>("/notifications/me/preferences/telegram-link", {
       method: "POST",
     });
+  }
+
+  async function startTwoFactorSetup() {
+    const setupSession = await request<TwoFactorSetupSession>("/auth/2fa/setup", {
+      method: "POST",
+    });
+    setTwoFactorSetupSession(setupSession);
+    setTwoFactorRecoveryCodes([]);
+  }
+
+  async function enableTwoFactor(input: { currentPassword: string; code: string }) {
+    const result = await request<TwoFactorEnableResult>("/auth/2fa/enable", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+    setTwoFactorSetupSession(null);
+    setTwoFactorRecoveryCodes(result.recoveryCodes);
+    await loadData();
+  }
+
+  async function disableTwoFactor(input: {
+    currentPassword: string;
+    code?: string;
+    recoveryCode?: string;
+  }) {
+    await request<TwoFactorDisableResult>("/auth/2fa/disable", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+    setTwoFactorSetupSession(null);
+    setTwoFactorRecoveryCodes([]);
+    await loadData();
   }
 
   async function createReview(input: { consultationId: string; rating: number; text?: string }) {
@@ -726,6 +781,15 @@ export function DashboardClient() {
                 onToggle={toggleAvailabilityException}
               />
             ) : null}
+
+            <TwoFactorSecurityPanel
+              onDisable={disableTwoFactor}
+              onEnable={enableTwoFactor}
+              onStartSetup={startTwoFactorSetup}
+              recoveryCodes={twoFactorRecoveryCodes}
+              setupSession={twoFactorSetupSession}
+              status={twoFactorStatus}
+            />
 
             <NotificationPreferencesPanel
               onCreateTelegramLink={createTelegramLink}

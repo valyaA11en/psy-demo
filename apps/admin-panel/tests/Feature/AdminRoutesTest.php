@@ -77,4 +77,18 @@ class AdminRoutesTest extends TestCase
 
         $response->assertRedirect(route('login'));
     }
+
+    public function test_admin_security_2fa_page_redirects_guest_to_login(): void
+    {
+        $response = $this->get('/admin/security/2fa');
+
+        $response->assertRedirect(route('login'));
+    }
+
+    public function test_admin_2fa_challenge_redirects_without_pending_session(): void
+    {
+        $response = $this->get('/admin/2fa/challenge');
+
+        $response->assertRedirect(route('login'));
+    }
 }

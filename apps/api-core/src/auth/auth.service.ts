@@ -1,8 +1,10 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
+  NotFoundException,
   UnauthorizedException,
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
@@ -20,16 +22,35 @@ import { NotificationsService } from "../notifications/notifications.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { LoginDto } from "./dto/login.dto";
 import { RegisterDto } from "./dto/register.dto";
+import { DisableTwoFactorDto } from "./dto/disable-two-factor.dto";
+import { EnableTwoFactorDto } from "./dto/enable-two-factor.dto";
 import { ResendEmailVerificationDto } from "./dto/resend-email-verification.dto";
 import { VerifyEmailDto } from "./dto/verify-email.dto";
+import { VerifyTwoFactorLoginDto } from "./dto/verify-two-factor-login.dto";
 import { RefreshTokenPayload } from "./interfaces/refresh-token-payload.interface";
 import { SessionRevocationService } from "./session-revocation.service";
+import { TwoFactorService } from "./two-factor.service";
+import { TwoFactorStateService } from "./two-factor-state.service";
 
 type AuthIdentity = Prisma.UserGetPayload<{
   include: {
     roles: { include: { role: true } };
     clientProfile: true;
     psychologistProfile: true;
+    twoFactorCredential: {
+      select: {
+        enabledAt: true;
+      };
+    };
+  };
+}>;
+
+type AuthTwoFactorUser = Prisma.UserGetPayload<{
+  include: {
+    roles: { include: { role: true } };
+    clientProfile: true;
+    psychologistProfile: true;
+    twoFactorCredential: true;
   };
 }>;
 
@@ -44,6 +65,8 @@ export class AuthService {
     private readonly auditService: AuditService,
     private readonly notificationsService: NotificationsService,
     private readonly sessionRevocationService: SessionRevocationService,
+    private readonly twoFactorService: TwoFactorService,
+    private readonly twoFactorStateService: TwoFactorStateService,
   ) {}
 
   async register(dto: RegisterDto, request: Request) {
@@ -178,6 +201,11 @@ export class AuthService {
         },
         clientProfile: true,
         psychologistProfile: true,
+        twoFactorCredential: {
+          select: {
+            enabledAt: true,
+          },
+        },
       },
     });
 
@@ -191,6 +219,34 @@ export class AuthService {
 
     if (user.status !== UserStatus.active) {
       throw new ForbiddenException("Пользователь не активен");
+    }
+
+    if (this.isTwoFactorProtected(user)) {
+      const challenge = await this.twoFactorStateService.createLoginChallenge({
+        userId: user.id,
+        email: user.email,
+        roles: this.roleCodes(user),
+      });
+
+      await this.auditService.log({
+        actorUserId: user.id,
+        actorRole: this.roleCodes(user)[0] ?? null,
+        action: "auth.login_2fa_challenge_started",
+        entityType: "user",
+        entityId: user.id,
+        requestId: (request as any).requestId ?? null,
+        ip: request.ip,
+        userAgent: request.headers["user-agent"] ?? null,
+      });
+
+      this.clearRefreshCookie(response);
+
+      return {
+        requiresTwoFactor: true,
+        challengeToken: challenge.token,
+        challengeExpiresAt: challenge.expiresAt.toISOString(),
+        methods: ["totp", "recovery_code"],
+      };
     }
 
     await this.prisma.user.update({
@@ -214,6 +270,136 @@ export class AuthService {
     return this.issueAuthSession(user, request, response);
   }
 
+  async verifyTwoFactorLogin(
+    dto: VerifyTwoFactorLoginDto,
+    request: Request,
+    response: Response,
+  ) {
+    if (!dto.code && !dto.recoveryCode) {
+      throw new BadRequestException("Введите TOTP-код или recovery code");
+    }
+
+    const challenge = await this.twoFactorStateService.getLoginChallenge(dto.challengeToken);
+
+    if (!challenge || new Date(challenge.expiresAt) < new Date()) {
+      await this.twoFactorStateService.deleteLoginChallenge(dto.challengeToken);
+      throw new UnauthorizedException("2FA challenge недействителен или истёк");
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: challenge.userId },
+      include: {
+        roles: {
+          include: {
+            role: true,
+          },
+        },
+        clientProfile: true,
+        psychologistProfile: true,
+        twoFactorCredential: true,
+      },
+    });
+
+    if (!user) {
+      await this.twoFactorStateService.deleteLoginChallenge(dto.challengeToken);
+      throw new NotFoundException("Пользователь не найден");
+    }
+
+    if (!user.emailVerifiedAt || user.status !== UserStatus.active || !this.isTwoFactorProtected(user)) {
+      await this.twoFactorStateService.deleteLoginChallenge(dto.challengeToken);
+      throw new UnauthorizedException("2FA challenge больше не актуален");
+    }
+
+    const credential = user.twoFactorCredential;
+
+    if (!credential) {
+      await this.twoFactorStateService.deleteLoginChallenge(dto.challengeToken);
+      throw new UnauthorizedException("2FA credential не найден");
+    }
+
+    const usedRecoveryCode = Boolean(dto.recoveryCode && !dto.code);
+    let verified = false;
+
+    if (dto.code) {
+      verified = this.twoFactorService.verifyTotp(
+        this.twoFactorService.decryptSecret(credential.totpSecretEncrypted),
+        dto.code,
+      );
+    } else if (dto.recoveryCode) {
+      const remainingRecoveryCodes = this.consumeRecoveryCode(
+        credential.recoveryCodesJson,
+        dto.recoveryCode,
+      );
+
+      if (remainingRecoveryCodes) {
+        await this.prisma.userTwoFactorCredential.update({
+          where: { userId: user.id },
+          data: {
+            recoveryCodesJson: remainingRecoveryCodes,
+          },
+        });
+        verified = true;
+      }
+    }
+
+    if (!verified) {
+      throw new UnauthorizedException("Неверный код подтверждения");
+    }
+
+    await this.twoFactorStateService.deleteLoginChallenge(dto.challengeToken);
+
+    const identity = await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        lastLoginAt: new Date(),
+      },
+      include: {
+        roles: {
+          include: {
+            role: true,
+          },
+        },
+        clientProfile: true,
+        psychologistProfile: true,
+        twoFactorCredential: {
+          select: {
+            enabledAt: true,
+          },
+        },
+      },
+    });
+
+    await this.auditService.log({
+      actorUserId: identity.id,
+      actorRole: this.roleCodes(identity)[0] ?? null,
+      action: "auth.login_2fa_verified",
+      entityType: "user",
+      entityId: identity.id,
+      requestId: (request as any).requestId ?? null,
+      ip: request.ip,
+      userAgent: request.headers["user-agent"] ?? null,
+      metadataJson: {
+        usedRecoveryCode,
+      },
+    });
+
+    await this.auditService.log({
+      actorUserId: identity.id,
+      actorRole: this.roleCodes(identity)[0] ?? null,
+      action: "auth.login",
+      entityType: "user",
+      entityId: identity.id,
+      requestId: (request as any).requestId ?? null,
+      ip: request.ip,
+      userAgent: request.headers["user-agent"] ?? null,
+      metadataJson: {
+        viaTwoFactorChallenge: true,
+      },
+    });
+
+    return this.issueAuthSession(identity, request, response);
+  }
+
   async verifyEmail(dto: VerifyEmailDto, request: Request, response: Response) {
     const verificationToken = await this.prisma.emailVerificationToken.findUnique({
       where: {
@@ -229,6 +415,11 @@ export class AuthService {
             },
             clientProfile: true,
             psychologistProfile: true,
+            twoFactorCredential: {
+              select: {
+                enabledAt: true,
+              },
+            },
           },
         },
       },
@@ -293,6 +484,11 @@ export class AuthService {
           },
           clientProfile: true,
           psychologistProfile: true,
+          twoFactorCredential: {
+            select: {
+              enabledAt: true,
+            },
+          },
         },
       });
     });
@@ -371,6 +567,11 @@ export class AuthService {
             },
             clientProfile: true,
             psychologistProfile: true,
+            twoFactorCredential: {
+              select: {
+                enabledAt: true,
+              },
+            },
           },
         },
       },
@@ -410,6 +611,275 @@ export class AuthService {
     });
 
     return this.issueAuthSession(session.user as AuthIdentity, request, response, session.id);
+  }
+
+  async getTwoFactorStatus(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        is2faEnabled: true,
+        twoFactorCredential: {
+          select: {
+            enabledAt: true,
+            recoveryCodesJson: true,
+          },
+        },
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException("Пользователь не найден");
+    }
+
+    const pendingSetup = await this.twoFactorStateService.getPendingSetup(userId);
+
+    return {
+      enabled: this.isTwoFactorProtected(user),
+      enabledAt: user.twoFactorCredential?.enabledAt?.toISOString() ?? null,
+      recoveryCodesRemaining: this.countRecoveryCodes(user.twoFactorCredential?.recoveryCodesJson ?? null),
+      pendingSetup: Boolean(pendingSetup),
+      pendingSetupExpiresAt: pendingSetup?.expiresAt ?? null,
+    };
+  }
+
+  async startTwoFactorSetup(userId: string, roles: string[], request: Request) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        status: true,
+        is2faEnabled: true,
+        twoFactorCredential: {
+          select: {
+            enabledAt: true,
+          },
+        },
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException("Пользователь не найден");
+    }
+
+    if (this.isTwoFactorProtected(user)) {
+      throw new BadRequestException("2FA уже включена");
+    }
+
+    if (user.status !== UserStatus.active) {
+      throw new ForbiddenException("2FA можно включить только для активного аккаунта");
+    }
+
+    const secret = this.twoFactorService.generateSecret();
+    const pendingSetup = await this.twoFactorStateService.storePendingSetup(userId, secret);
+
+    await this.auditService.log({
+      actorUserId: userId,
+      actorRole: roles[0] ?? null,
+      action: "auth.2fa_setup_started",
+      entityType: "user",
+      entityId: userId,
+      requestId: (request as any).requestId ?? null,
+      ip: request.ip,
+      userAgent: request.headers["user-agent"] ?? null,
+    });
+
+    return {
+      manualEntryKey: secret,
+      manualEntryKeyDisplay: this.twoFactorService.formatSecretForDisplay(secret),
+      otpauthUri: this.twoFactorService.buildOtpAuthUri(user.email, secret),
+      issuer: this.twoFactorService.issuer(),
+      accountLabel: user.email,
+      expiresAt: pendingSetup.expiresAt.toISOString(),
+    };
+  }
+
+  async enableTwoFactor(
+    userId: string,
+    sessionId: string,
+    roles: string[],
+    dto: EnableTwoFactorDto,
+    request: Request,
+  ) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        passwordHash: true,
+        status: true,
+        is2faEnabled: true,
+        twoFactorCredential: {
+          select: {
+            enabledAt: true,
+          },
+        },
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException("Пользователь не найден");
+    }
+
+    if (this.isTwoFactorProtected(user)) {
+      throw new BadRequestException("2FA уже включена");
+    }
+
+    if (!(await bcrypt.compare(dto.currentPassword, user.passwordHash))) {
+      throw new UnauthorizedException("Неверный текущий пароль");
+    }
+
+    const pendingSetup = await this.twoFactorStateService.getPendingSetup(userId);
+
+    if (!pendingSetup || new Date(pendingSetup.expiresAt) < new Date()) {
+      await this.twoFactorStateService.clearPendingSetup(userId);
+      throw new BadRequestException("Секрет 2FA истёк. Сгенерируйте его заново");
+    }
+
+    if (!this.twoFactorService.verifyTotp(pendingSetup.secret, dto.code)) {
+      throw new BadRequestException("Неверный TOTP-код");
+    }
+
+    const recoveryCodes = this.twoFactorService.generateRecoveryCodes();
+    const enabledAt = new Date();
+    const encryptedSecret = this.twoFactorService.encryptSecret(pendingSetup.secret);
+    const recoveryCodeHashes = recoveryCodes.map((code) => this.twoFactorService.hashRecoveryCode(code));
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.userTwoFactorCredential.upsert({
+        where: { userId },
+        update: {
+          totpSecretEncrypted: encryptedSecret,
+          recoveryCodesJson: recoveryCodeHashes,
+          enabledAt,
+        },
+        create: {
+          userId,
+          totpSecretEncrypted: encryptedSecret,
+          recoveryCodesJson: recoveryCodeHashes,
+          enabledAt,
+        },
+      });
+
+      await tx.user.update({
+        where: { id: userId },
+        data: {
+          is2faEnabled: true,
+        },
+      });
+    });
+
+    await this.twoFactorStateService.clearPendingSetup(userId);
+    const revokedSessions = await this.revokeOtherSessions(userId, sessionId);
+
+    await this.auditService.log({
+      actorUserId: userId,
+      actorRole: roles[0] ?? null,
+      action: "auth.2fa_enabled",
+      entityType: "user",
+      entityId: userId,
+      requestId: (request as any).requestId ?? null,
+      ip: request.ip,
+      userAgent: request.headers["user-agent"] ?? null,
+      metadataJson: {
+        recoveryCodesCount: recoveryCodes.length,
+        revokedSessions,
+      },
+    });
+
+    return {
+      success: true,
+      enabledAt: enabledAt.toISOString(),
+      recoveryCodes,
+      recoveryCodesCount: recoveryCodes.length,
+    };
+  }
+
+  async disableTwoFactor(
+    userId: string,
+    sessionId: string,
+    roles: string[],
+    dto: DisableTwoFactorDto,
+    request: Request,
+  ) {
+    if (!dto.code && !dto.recoveryCode) {
+      throw new BadRequestException("Введите TOTP-код или recovery code");
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        passwordHash: true,
+        is2faEnabled: true,
+        twoFactorCredential: true,
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException("Пользователь не найден");
+    }
+
+    if (!(await bcrypt.compare(dto.currentPassword, user.passwordHash))) {
+      throw new UnauthorizedException("Неверный текущий пароль");
+    }
+
+    if (!this.isTwoFactorProtected(user) || !user.twoFactorCredential) {
+      throw new BadRequestException("2FA уже отключена");
+    }
+
+    let verified = false;
+    let usedRecoveryCode = false;
+
+    if (dto.code) {
+      verified = this.twoFactorService.verifyTotp(
+        this.twoFactorService.decryptSecret(user.twoFactorCredential.totpSecretEncrypted),
+        dto.code,
+      );
+    } else if (dto.recoveryCode) {
+      verified = Boolean(this.consumeRecoveryCode(user.twoFactorCredential.recoveryCodesJson, dto.recoveryCode));
+      usedRecoveryCode = verified;
+    }
+
+    if (!verified) {
+      throw new UnauthorizedException("Неверный код подтверждения");
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.userTwoFactorCredential.delete({
+        where: { userId },
+      });
+
+      await tx.user.update({
+        where: { id: userId },
+        data: {
+          is2faEnabled: false,
+        },
+      });
+    });
+
+    await this.twoFactorStateService.clearPendingSetup(userId);
+    const revokedSessions = await this.revokeOtherSessions(userId, sessionId);
+
+    await this.auditService.log({
+      actorUserId: userId,
+      actorRole: roles[0] ?? null,
+      action: "auth.2fa_disabled",
+      entityType: "user",
+      entityId: userId,
+      requestId: (request as any).requestId ?? null,
+      ip: request.ip,
+      userAgent: request.headers["user-agent"] ?? null,
+      metadataJson: {
+        usedRecoveryCode,
+        revokedSessions,
+      },
+    });
+
+    return {
+      success: true,
+      revokedSessions,
+    };
   }
 
   async logout(request: Request, response: Response) {
@@ -659,6 +1129,7 @@ export class AuthService {
       status: user.status,
       emailVerifiedAt: user.emailVerifiedAt,
       roles: this.roleCodes(user),
+      twoFactorEnabled: this.isTwoFactorProtected(user),
       clientProfile: user.clientProfile,
       psychologistProfile: user.psychologistProfile,
     };
@@ -695,5 +1166,84 @@ export class AuthService {
 
   private isEmailVerificationDebugEnabled() {
     return this.configService.get<string>("AUTH_DEBUG_EMAIL_VERIFICATION_LINKS", "false") === "true";
+  }
+
+  private isTwoFactorProtected(user: {
+    is2faEnabled?: boolean;
+    twoFactorCredential?: { enabledAt?: Date | null } | null;
+  }) {
+    return Boolean(user.is2faEnabled && user.twoFactorCredential?.enabledAt);
+  }
+
+  private consumeRecoveryCode(recoveryCodesJson: Prisma.JsonValue, recoveryCode: string) {
+    const recoveryCodes = Array.isArray(recoveryCodesJson)
+      ? recoveryCodesJson.filter((item): item is string => typeof item === "string")
+      : [];
+    const recoveryHash = this.twoFactorService.hashRecoveryCode(recoveryCode);
+    const matchedIndex = recoveryCodes.findIndex((candidate) => candidate === recoveryHash);
+
+    if (matchedIndex === -1) {
+      return null;
+    }
+
+    return recoveryCodes.filter((_, index) => index !== matchedIndex);
+  }
+
+  private countRecoveryCodes(recoveryCodesJson: Prisma.JsonValue | null) {
+    return Array.isArray(recoveryCodesJson)
+      ? recoveryCodesJson.filter((item): item is string => typeof item === "string").length
+      : 0;
+  }
+
+  private async revokeOtherSessions(userId: string, currentSessionId?: string) {
+    const activeSessions = await this.prisma.refreshToken.findMany({
+      where: {
+        userId,
+        revokedAt: null,
+        ...(currentSessionId
+          ? {
+              id: {
+                not: currentSessionId,
+              },
+            }
+          : {}),
+      },
+      select: {
+        id: true,
+        userId: true,
+        expiresAt: true,
+      },
+    });
+
+    if (activeSessions.length === 0) {
+      return 0;
+    }
+
+    await this.prisma.refreshToken.updateMany({
+      where: {
+        userId,
+        revokedAt: null,
+        ...(currentSessionId
+          ? {
+              id: {
+                not: currentSessionId,
+              },
+            }
+          : {}),
+      },
+      data: {
+        revokedAt: new Date(),
+      },
+    });
+
+    await this.sessionRevocationService.revokeMany(
+      activeSessions.map((session) => ({
+        sessionId: session.id,
+        userId: session.userId,
+        expiresAt: session.expiresAt,
+      })),
+    );
+
+    return activeSessions.length;
   }
 }

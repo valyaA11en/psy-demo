@@ -12,6 +12,7 @@ import {
 import type {
   ApiEnvelope,
   ApiErrorPayload,
+  AuthLoginResult,
   AuthSessionPayload,
   AuthUser,
   RegisterResult,
@@ -36,7 +37,8 @@ type AuthContextValue = {
   ready: boolean;
   accessToken: string | null;
   user: AuthUser | null;
-  login: (email: string, password: string) => Promise<AuthSessionPayload>;
+  login: (email: string, password: string) => Promise<AuthLoginResult>;
+  verifyTwoFactorLogin: (challengeToken: string, input: { code?: string; recoveryCode?: string }) => Promise<AuthSessionPayload>;
   register: (input: RegisterInput) => Promise<RegisterResult>;
   verifyEmail: (token: string) => Promise<AuthSessionPayload>;
   resendVerification: (email: string) => Promise<ResendVerificationResult>;
@@ -80,6 +82,10 @@ function buildHeaders(initHeaders: HeadersInit | undefined, token?: string | nul
   }
 
   return headers;
+}
+
+function isSessionPayload(result: AuthLoginResult): result is AuthSessionPayload {
+  return "accessToken" in result;
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -152,6 +158,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ email, password }),
+    });
+
+    const result = await parseEnvelope<AuthLoginResult>(response);
+    if (isSessionPayload(result)) {
+      applySession(result);
+    }
+    return result;
+  }
+
+  async function verifyTwoFactorLogin(
+    challengeToken: string,
+    input: { code?: string; recoveryCode?: string },
+  ) {
+    const response = await fetch(`${clientApiBaseUrl()}/auth/2fa/verify-login`, {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        challengeToken,
+        ...input,
+      }),
     });
 
     const session = await parseEnvelope<AuthSessionPayload>(response);
@@ -251,6 +280,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         accessToken,
         user,
         login,
+        verifyTwoFactorLogin,
         register,
         verifyEmail,
         resendVerification,
