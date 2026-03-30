@@ -5,7 +5,7 @@ import {
   PaymentEventType,
   PaymentStatus,
   Prisma,
-} from "@prisma/client";
+} from "prisma-client-generated";
 import {
   BadRequestException,
   ConflictException,
@@ -116,6 +116,18 @@ export class PaymentsService {
         clientUserId,
       },
       include: {
+        sessionPackageUsage: {
+          select: {
+            id: true,
+            releasedAt: true,
+            sessionPackage: {
+              select: {
+                id: true,
+                title: true,
+              },
+            },
+          },
+        },
         psychologist: {
           select: {
             psychologistProfile: {
@@ -148,6 +160,10 @@ export class PaymentsService {
 
     if (consultation.status !== ConsultationStatus.scheduled) {
       throw new ConflictException("Оплачивать можно только запланированные консультации");
+    }
+
+    if (consultation.sessionPackageUsage && !consultation.sessionPackageUsage.releasedAt) {
+      throw new ConflictException("Эта консультация уже покрыта активным пакетом сессий");
     }
 
     const amount = consultation.psychologist.psychologistProfile?.priceFrom;

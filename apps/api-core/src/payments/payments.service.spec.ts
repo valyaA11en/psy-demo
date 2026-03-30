@@ -5,7 +5,7 @@ import {
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
-import { ConsultationStatus, PaymentStatus } from '@prisma/client';
+import { ConsultationStatus, PaymentStatus } from 'prisma-client-generated';
 import { PaymentsService } from './payments.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';

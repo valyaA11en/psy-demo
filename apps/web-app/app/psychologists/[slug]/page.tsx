@@ -2,7 +2,12 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BookingActions } from "@/components/booking-actions";
 import { formatDateTime, formatMoney, humanizeCode } from "@/lib/format";
-import { getPsychologist, getPsychologistReviews, getPsychologistSlots } from "@/lib/server-api";
+import {
+  getPsychologist,
+  getPsychologistReviews,
+  getPsychologistSessionPackageOffers,
+  getPsychologistSlots,
+} from "@/lib/server-api";
 
 type PsychologistPageProps = {
   params: Promise<{
@@ -14,10 +19,11 @@ export default async function PsychologistPage({ params }: PsychologistPageProps
   const { slug } = await params;
 
   try {
-    const [psychologist, slotsResponse, reviewsResponse] = await Promise.all([
+    const [psychologist, slotsResponse, reviewsResponse, sessionPackageOffers] = await Promise.all([
       getPsychologist(slug),
       getPsychologistSlots(slug, "?limit=8"),
       getPsychologistReviews(slug, "?limit=6"),
+      getPsychologistSessionPackageOffers(slug),
     ]);
 
     return (
@@ -94,8 +100,40 @@ export default async function PsychologistPage({ params }: PsychologistPageProps
               <p className="section-text">
                 После выбора слота создаётся консультация, а оплату можно провести в кабинете через тестовый сценарий оплаты.
               </p>
-              <BookingActions psychologistName={psychologist.fullName} slots={slotsResponse.items} />
+              <BookingActions
+                packageOffers={sessionPackageOffers.items}
+                psychologistName={psychologist.fullName}
+                psychologistSlug={psychologist.slug}
+                slots={slotsResponse.items}
+              />
             </div>
+
+            {sessionPackageOffers.items.length > 0 ? (
+              <div className="surface stack">
+                <div>
+                  <p className="caption">Пакеты</p>
+                  <h2 className="section-title">Пакеты сессий со скидкой</h2>
+                </div>
+                <div className="stack compact-stack">
+                  {sessionPackageOffers.items.map((offer) => (
+                    <article className="surface surface-muted" key={offer.id}>
+                      <div className="meta-row">
+                        <strong>{offer.title}</strong>
+                        <span>{formatMoney(offer.totalPrice, offer.currency)}</span>
+                      </div>
+                      <div className="meta-row">
+                        <span>{offer.sessionCount} сессий</span>
+                        <span>скидка {offer.discountPercent}%</span>
+                      </div>
+                      {offer.description ? <p className="section-text">{offer.description}</p> : null}
+                    </article>
+                  ))}
+                </div>
+                <p className="section-text">
+                  Пакет активируется в аккаунте клиента и может быть выбран прямо при бронировании слота.
+                </p>
+              </div>
+            ) : null}
 
             <div className="surface stack">
               <div>

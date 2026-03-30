@@ -14,7 +14,7 @@ import {
   Prisma,
   PsychologistApprovalStatus,
   UserStatus,
-} from "@prisma/client";
+} from "prisma-client-generated";
 import bcrypt from "bcryptjs";
 import type { Request, Response } from "express";
 import { AuditService } from "../audit/audit.service";

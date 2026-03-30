@@ -69,6 +69,55 @@ export type PsychologistWorkspaceProfile = {
   specializations: Specialization[];
 };
 
+export type PsychologistAnalyticsResponse = {
+  psychologist: {
+    userId: string;
+    fullName: string;
+    publicSlug: string;
+    publicTitle: string | null;
+    ratingAvg: number;
+    reviewsCount: number;
+    specializations: Specialization[];
+  };
+  period: {
+    months: number;
+    from: string;
+    to: string;
+  };
+  summary: {
+    completedSessions: number;
+    scheduledSessions: number;
+    cancelledSessions: number;
+    uniqueClients: number;
+    grossRevenue: number;
+    revenueCurrency: string;
+    succeededPayments: number;
+    averageRating: number;
+    reviewsCount: number;
+    periodReviewCount: number;
+    periodAverageRating: number | null;
+    homeworkAssigned: number;
+    homeworkCompleted: number;
+    homeworkCompletionRate: number;
+  };
+  engagement: {
+    activeClientsLast90Days: number;
+    clientsWithMoodEntriesLast30Days: number;
+    unreadMessagesCount: number;
+    activeHomeworkTasks: number;
+    overdueHomeworkTasks: number;
+  };
+  monthly: Array<{
+    monthKey: string;
+    label: string;
+    completedSessions: number;
+    scheduledSessions: number;
+    cancelledSessions: number;
+    grossRevenue: number;
+    currency: string;
+  }>;
+};
+
 export type PublicReview = {
   id: string;
   consultationId: string | null;
@@ -89,6 +138,28 @@ export type PublicReviewListResponse = {
   };
   items: PublicReview[];
   pagination: Pagination;
+};
+
+export type PublicSessionPackageOffer = {
+  id: string;
+  title: string;
+  description: string | null;
+  sessionCount: number;
+  discountPercent: number;
+  totalPrice: number;
+  currency: string;
+  isActive: boolean;
+  psychologistUserId: string;
+};
+
+export type PublicSessionPackageOffersResponse = {
+  psychologist: {
+    id: string;
+    slug: string;
+    fullName: string;
+    publicTitle: string | null;
+  };
+  items: PublicSessionPackageOffer[];
 };
 
 export type CatalogResponse = {
@@ -303,6 +374,19 @@ export type DashboardBooking = {
     timezone: string | null;
   };
   latestPayment: LatestPayment | null;
+  packageUsage: {
+    id: string;
+    releasedAt: string | null;
+    sessionPackage: {
+      id: string;
+      title: string;
+      totalSessions: number;
+      remainingSessions: number;
+      status: string;
+      currency: string;
+      discountPercent: number;
+    };
+  } | null;
   review: BookingReview | null;
   canLeaveReview: boolean;
   statusHistory?: Array<{
@@ -375,6 +459,53 @@ export type PaymentListResponse = {
   filters: {
     status: string | null;
     consultationId: string | null;
+  };
+};
+
+export type ClientSessionPackageRecord = {
+  id: string;
+  title: string;
+  totalSessions: number;
+  remainingSessions: number;
+  discountPercent: number;
+  priceAmount: number;
+  currency: string;
+  status: string;
+  purchasedAt: string;
+  expiresAt: string | null;
+  cancelledAt: string | null;
+  offer: {
+    id: string;
+    title: string;
+    description: string | null;
+    sessionCount: number;
+    discountPercent: number;
+    totalPrice: number;
+    currency: string;
+  };
+  psychologist: {
+    userId: string;
+    slug: string | null;
+    fullName: string | null;
+    publicTitle: string | null;
+  };
+  usageSummary: {
+    usedSessions: number;
+    releasedSessions: number;
+  };
+  usages: Array<{
+    id: string;
+    consultationId: string;
+    usedAt: string;
+    releasedAt: string | null;
+  }>;
+};
+
+export type ClientSessionPackagesResponse = {
+  items: ClientSessionPackageRecord[];
+  filters: {
+    psychologistSlug: string | null;
+    status: string | null;
   };
 };
 
@@ -490,6 +621,110 @@ export type ComplaintListResponse = {
   };
 };
 
+export type MoodEntryRecord = {
+  id: string;
+  clientUserId: string;
+  recordedForDate: string;
+  moodScore: number;
+  emotions: string[];
+  note: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type MoodEntriesSummary = {
+  daysTracked: number;
+  averageScore: number | null;
+  latestScore: number | null;
+  latestRecordedForDate: string | null;
+  minScore: number | null;
+  maxScore: number | null;
+};
+
+export type MoodEntriesResponse = {
+  client: {
+    userId: string;
+    displayName: string;
+    timezone: string | null;
+  } | null;
+  items: MoodEntryRecord[];
+  summary: MoodEntriesSummary;
+  filters: {
+    dateFrom: string | null;
+    dateTo: string | null;
+    limit: number;
+  };
+};
+
+export type HomeworkTaskRecord = {
+  id: string;
+  consultationId: string;
+  title: string;
+  description: string | null;
+  dueAt: string | null;
+  status: string;
+  clientNote: string | null;
+  completedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  consultation: {
+    id: string;
+    status: string;
+    scheduledAt: string;
+    slot: {
+      startsAt: string;
+      endsAt: string;
+    };
+  };
+  client: {
+    userId: string;
+    displayName: string;
+    timezone: string | null;
+  } | null;
+  psychologist: {
+    userId: string;
+    slug: string | null;
+    fullName: string | null;
+    publicTitle: string | null;
+  } | null;
+};
+
+export type HomeworkTasksResponse = {
+  items: HomeworkTaskRecord[];
+  pagination: Pagination;
+  filters: {
+    status: string | null;
+  };
+};
+
+export type ChatMessageRecord = {
+  id: string;
+  body: string;
+  createdAt: string;
+  readAt: string | null;
+  senderUserId: string;
+  senderDisplayName: string;
+  isMine: boolean;
+};
+
+export type ChatThreadResponse = {
+  conversation: {
+    counterpart: {
+      userId: string;
+      displayName: string;
+      publicTitle: string | null;
+      timezone: string | null;
+    };
+    actorRole: "client" | "psychologist";
+  };
+  items: ChatMessageRecord[];
+  unreadCount: number;
+  filters: {
+    limit: number;
+    before: string | null;
+  };
+};
+
 export type SessionInfo = {
   consultationId: string;
   participantRole: "client" | "psychologist";
@@ -511,6 +746,7 @@ export type SessionInfo = {
   accessPolicy: {
     participantsOnly: boolean;
     requiresSucceededPayment: boolean;
+    allowsSessionPackageCoverage?: boolean;
     opensBeforeStartMinutes: number;
     closesAfterEndMinutes: number;
   };
@@ -537,12 +773,13 @@ export type RealtimeDomainEvent = {
     | "booking.created"
     | "booking.cancelled"
     | "booking.completed"
+    | "chat.message.created"
     | "payment.created"
     | "payment.updated"
     | "video.session_ready";
   occurredAt: string;
   entity: {
-    type: "consultation" | "payment" | "video_session";
+    type: "consultation" | "message" | "payment" | "video_session";
     id: string;
   };
   audience: {
@@ -551,6 +788,8 @@ export type RealtimeDomainEvent = {
   };
   payload: {
     consultationId?: string;
+    messageId?: string;
+    counterpartUserId?: string;
     paymentId?: string;
     status?: string;
     reasonCode?: string;

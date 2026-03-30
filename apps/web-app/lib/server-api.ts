@@ -3,6 +3,7 @@ import type {
   ApiErrorPayload,
   CatalogResponse,
   PublicPsychologist,
+  PublicSessionPackageOffersResponse,
   PublicReviewListResponse,
   PublicSlotsResponse,
   Specialization,
@@ -60,4 +61,8 @@ export async function getPsychologistSlots(slug: string, query = "") {
 
 export async function getPsychologistReviews(slug: string, query = "") {
   return apiServerGet<PublicReviewListResponse>(`/reviews/psychologists/${slug}${query}`);
+}
+
+export async function getPsychologistSessionPackageOffers(slug: string) {
+  return apiServerGet<PublicSessionPackageOffersResponse>(`/session-packages/offers/psychologists/${slug}`);
 }

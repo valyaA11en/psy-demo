@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import { FileStatus, Prisma } from "@prisma/client";
+import { FileStatus, Prisma } from "prisma-client-generated";
 import type { Request } from "express";
 import { AuditService } from "../audit/audit.service";
 import { PrismaService } from "../prisma/prisma.service";

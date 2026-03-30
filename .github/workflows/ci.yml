@@ -42,6 +42,9 @@ jobs:
       - name: Prisma validate
         run: npx prisma validate
 
+      - name: Prisma generate
+        run: npm run prisma:generate
+
       - name: Build
         run: npm run build
 

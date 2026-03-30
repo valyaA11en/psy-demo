@@ -45,7 +45,7 @@ export function VideoAccessPanel({ consultationId }: VideoAccessPanelProps) {
   }, [consultationId, ready, user]);
 
   if (!ready) {
-    return <section className="page">Проверяем сессию...</section>;
+    return <section className="page">Проверяем доступ к видеосессии...</section>;
   }
 
   if (!user) {
@@ -87,12 +87,27 @@ export function VideoAccessPanel({ consultationId }: VideoAccessPanelProps) {
       <div className="section-head">
         <div>
           <p className="caption">Доступ к видеосессии</p>
-          <h1 className="section-title">Сессия консультации</h1>
+          <h1 className="section-title">Пространство видеосессии</h1>
           <p className="section-text">ID консультации: {consultationId}</p>
         </div>
         <Link className="button button-ghost" href="/dashboard">
           Вернуться в кабинет
         </Link>
+      </div>
+
+      <div className="video-hero surface">
+        <div>
+          <p className="caption">бережный формат встречи</p>
+          <h2 className="card-title">Спокойный экран подключения без перегрузки</h2>
+          <p className="section-text">
+            Перед входом в сессию пользователь видит только ключевые статусы: время, условия доступа и готовность
+            комнаты. Это делает интерфейс современнее и понятнее.
+          </p>
+        </div>
+        <div className="video-hero-card">
+          <span className="caption">доступ</span>
+          <strong>{access ? "токен выпущен" : "ожидает запроса"}</strong>
+        </div>
       </div>
 
       {error ? <div className="notice notice-error">{error}</div> : null}
@@ -151,7 +166,7 @@ export function VideoAccessPanel({ consultationId }: VideoAccessPanelProps) {
           <div className="surface stack">
             <p className="caption">Политика доступа</p>
             <ul className="list-block">
-              <li>только участники: {session.accessPolicy.participantsOnly ? "да" : "нет"}</li>
+              <li>доступ только участникам: {session.accessPolicy.participantsOnly ? "да" : "нет"}</li>
               <li>нужна успешная оплата: {session.accessPolicy.requiresSucceededPayment ? "да" : "нет"}</li>
               <li>открывается за {session.accessPolicy.opensBeforeStartMinutes} минут до начала</li>
               <li>закрывается через {session.accessPolicy.closesAfterEndMinutes} минут после окончания</li>
@@ -182,7 +197,7 @@ export function VideoAccessPanel({ consultationId }: VideoAccessPanelProps) {
           </div>
         </div>
       ) : (
-        <div className="surface">Загружаем метаданные сессии...</div>
+        <div className="surface">Подготавливаем данные сессии...</div>
       )}
     </section>
   );

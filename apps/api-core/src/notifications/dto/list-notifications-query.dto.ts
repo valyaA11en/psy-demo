@@ -1,4 +1,4 @@
-import { NotificationStatus } from "@prisma/client";
+import { NotificationStatus } from "prisma-client-generated";
 import { ApiPropertyOptional } from "@nestjs/swagger";
 import { Transform } from "class-transformer";
 import { IsEnum, IsInt, IsOptional, Max, Min } from "class-validator";

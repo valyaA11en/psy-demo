@@ -3,7 +3,7 @@ import {
   AppointmentSlotStatus,
   Prisma,
   PsychologistApprovalStatus,
-} from "@prisma/client";
+} from "prisma-client-generated";
 import { DateTime } from "luxon";
 import { PrismaService } from "../prisma/prisma.service";
 import { ListPsychologistsQueryDto } from "./dto/list-psychologists-query.dto";

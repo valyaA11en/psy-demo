@@ -15,6 +15,8 @@ export function PaymentActions({ booking, onUpdated }: PaymentActionsProps) {
   const [error, setError] = useState<string | null>(null);
 
   const latestPayment = booking.latestPayment;
+  const activePackageUsage =
+    booking.packageUsage && !booking.packageUsage.releasedAt ? booking.packageUsage : null;
 
   function run(action: () => Promise<unknown>) {
     setPending(true);
@@ -90,6 +92,18 @@ export function PaymentActions({ booking, onUpdated }: PaymentActionsProps) {
 
   if (latestPayment?.status === "succeeded") {
     return <span className="status-badge status-badge-success">оплата завершена</span>;
+  }
+
+  if (activePackageUsage) {
+    return (
+      <div className="stack">
+        <span className="status-badge status-badge-success">покрыто пакетом сессий</span>
+        <p className="caption">
+          Использован пакет «{activePackageUsage.sessionPackage.title}». Осталось сессий:{" "}
+          {activePackageUsage.sessionPackage.remainingSessions} из {activePackageUsage.sessionPackage.totalSessions}.
+        </p>
+      </div>
+    );
   }
 
   if (!latestPayment || latestPayment.status === "failed" || latestPayment.status === "cancelled") {

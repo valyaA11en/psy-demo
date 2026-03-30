@@ -7,9 +7,16 @@ import { AvailabilityExceptionsPanel } from "@/components/availability-exception
 import { AvailabilityRulesPanel } from "@/components/availability-rules-panel";
 import { BookingComplaintPanel } from "@/components/booking-complaint-panel";
 import { BookingReviewPanel } from "@/components/booking-review-panel";
+import { ChatPanel } from "@/components/chat-panel";
+import { ClientSessionPackagesPanel } from "@/components/client-session-packages-panel";
+import { ClientHomeworkPanel } from "@/components/client-homework-panel";
+import { MoodDiaryPanel } from "@/components/mood-diary-panel";
 import { NotificationPreferencesPanel } from "@/components/notification-preferences-panel";
 import { AppointmentSlotsPanel } from "@/components/appointment-slots-panel";
+import { PsychologistAnalyticsPanel } from "@/components/psychologist-analytics-panel";
 import { PsychologistFilesPanel } from "@/components/psychologist-files-panel";
+import { PsychologistHomeworkPanel } from "@/components/psychologist-homework-panel";
+import { PsychologistMoodPanel } from "@/components/psychologist-mood-panel";
 import { PsychologistProfilePanel } from "@/components/psychologist-profile-panel";
 import { TwoFactorSecurityPanel } from "@/components/two-factor-security-panel";
 import { useAuth } from "@/components/auth-provider";
@@ -21,18 +28,28 @@ import type {
   AvailabilitySlot,
   AuthUser,
   BookingListResponse,
+  ChatMessageRecord,
+  ChatThreadResponse,
+  ClientSessionPackageRecord,
+  ClientSessionPackagesResponse,
   ComplaintListResponse,
   ComplaintRecord,
   DashboardBooking,
   FileDownloadSession,
   FileUploadSession,
   FilesListResponse,
+  HomeworkTaskRecord,
+  HomeworkTasksResponse,
   MyAvailabilitySlotsResponse,
+  MoodEntriesResponse,
+  MoodEntriesSummary,
+  MoodEntryRecord,
   NotificationListResponse,
   NotificationPreferences,
   NotificationRecord,
   PaymentListResponse,
   PaymentRecord,
+  PsychologistAnalyticsResponse,
   PsychologistWorkspaceProfile,
   PrivateFileRecord,
   RealtimeDomainEvent,
@@ -106,10 +123,83 @@ function resolveUploadMimeType(file: File) {
   return "image/jpeg";
 }
 
+function createEmptyMoodSummary(): MoodEntriesSummary {
+  return {
+    daysTracked: 0,
+    averageScore: null,
+    latestScore: null,
+    latestRecordedForDate: null,
+    minScore: null,
+    maxScore: null,
+  };
+}
+
+function collectPsychologistMoodClients(bookings: DashboardBooking[]) {
+  const seen = new Set<string>();
+  const items: Array<{ userId: string; displayName: string }> = [];
+
+  for (const booking of bookings) {
+    if (!booking.client || seen.has(booking.client.userId)) {
+      continue;
+    }
+
+    seen.add(booking.client.userId);
+    items.push({
+      userId: booking.client.userId,
+      displayName: booking.client.displayName || `Клиент ${booking.client.userId.slice(0, 6)}`,
+    });
+  }
+
+  return items;
+}
+
+function collectChatCounterparts(bookings: DashboardBooking[], roles: string[]) {
+  const seen = new Set<string>();
+  const items: Array<{ userId: string; displayName: string; subtitle?: string | null }> = [];
+
+  for (const booking of bookings) {
+    if (roles.includes("client") && booking.psychologist && !seen.has(booking.psychologist.userId)) {
+      seen.add(booking.psychologist.userId);
+      items.push({
+        userId: booking.psychologist.userId,
+        displayName: booking.psychologist.fullName ?? `Психолог ${booking.psychologist.userId.slice(0, 6)}`,
+        subtitle: booking.psychologist.publicTitle ?? null,
+      });
+      continue;
+    }
+
+    if (roles.includes("psychologist") && booking.client && !seen.has(booking.client.userId)) {
+      seen.add(booking.client.userId);
+      items.push({
+        userId: booking.client.userId,
+        displayName: booking.client.displayName,
+        subtitle: booking.client.timezone ? `часовой пояс: ${booking.client.timezone}` : null,
+      });
+    }
+  }
+
+  return items;
+}
+
 export function DashboardClient() {
   const { ready, accessToken, user, request } = useAuth();
   const [profile, setProfile] = useState<AuthUser | null>(null);
   const [bookings, setBookings] = useState<DashboardBooking[]>([]);
+  const [clientSessionPackages, setClientSessionPackages] = useState<ClientSessionPackageRecord[]>([]);
+  const [moodEntries, setMoodEntries] = useState<MoodEntryRecord[]>([]);
+  const [moodSummary, setMoodSummary] = useState<MoodEntriesSummary>(() => createEmptyMoodSummary());
+  const [psychologistMoodClient, setPsychologistMoodClient] = useState<MoodEntriesResponse["client"]>(null);
+  const [psychologistMoodEntries, setPsychologistMoodEntries] = useState<MoodEntryRecord[]>([]);
+  const [psychologistMoodSummary, setPsychologistMoodSummary] = useState<MoodEntriesSummary>(() =>
+    createEmptyMoodSummary(),
+  );
+  const [selectedMoodClientUserId, setSelectedMoodClientUserId] = useState<string | null>(null);
+  const [clientHomeworkTasks, setClientHomeworkTasks] = useState<HomeworkTaskRecord[]>([]);
+  const [psychologistHomeworkTasks, setPsychologistHomeworkTasks] = useState<HomeworkTaskRecord[]>([]);
+  const [chatMessages, setChatMessages] = useState<ChatMessageRecord[]>([]);
+  const [chatUnreadCount, setChatUnreadCount] = useState(0);
+  const [selectedChatCounterpartUserId, setSelectedChatCounterpartUserId] = useState<string | null>(null);
+  const [selectedChatCounterpartLabel, setSelectedChatCounterpartLabel] = useState<string | null>(null);
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
   const [availabilityRules, setAvailabilityRules] = useState<AvailabilityRule[]>([]);
   const [availabilitySlots, setAvailabilitySlots] = useState<AvailabilitySlot[]>([]);
@@ -118,6 +208,7 @@ export function DashboardClient() {
   );
   const [availabilityExceptions, setAvailabilityExceptions] = useState<AvailabilityException[]>([]);
   const [files, setFiles] = useState<PrivateFileRecord[]>([]);
+  const [psychologistAnalytics, setPsychologistAnalytics] = useState<PsychologistAnalyticsResponse | null>(null);
   const [psychologistWorkspaceProfile, setPsychologistWorkspaceProfile] = useState<PsychologistWorkspaceProfile | null>(null);
   const [specializationsCatalog, setSpecializationsCatalog] = useState<Specialization[]>([]);
   const [notificationPreferences, setNotificationPreferences] = useState<NotificationPreferences | null>(null);
@@ -146,21 +237,36 @@ export function DashboardClient() {
       setProfile(profileData);
 
       if (user.roles.includes("client")) {
-        const [bookingData, paymentData, notificationData, preferenceData, complaintData, twoFactorStatusData] = await Promise.all([
+        const [bookingData, paymentData, notificationData, preferenceData, complaintData, twoFactorStatusData, moodData, homeworkData, sessionPackageData] = await Promise.all([
           request<BookingListResponse>("/bookings/me"),
           request<PaymentListResponse>("/payments/me"),
           request<NotificationListResponse>("/notifications/me?limit=6"),
           request<NotificationPreferences>("/notifications/me/preferences"),
           request<ComplaintListResponse>("/complaints/me?limit=6"),
           request<TwoFactorStatus>("/auth/2fa"),
+          request<MoodEntriesResponse>("/mood-entries/me?limit=14"),
+          request<HomeworkTasksResponse>("/homework-tasks/me?limit=10"),
+          request<ClientSessionPackagesResponse>("/session-packages/me?status=active"),
         ]);
 
         setBookings(bookingData.items);
+        setClientSessionPackages(sessionPackageData.items);
+        setMoodEntries(moodData.items);
+        setMoodSummary(moodData.summary);
+        setClientHomeworkTasks(homeworkData.items);
+        setPsychologistHomeworkTasks([]);
+        setChatMessages([]);
+        setChatUnreadCount(0);
+        setPsychologistMoodClient(null);
+        setPsychologistMoodEntries([]);
+        setPsychologistMoodSummary(createEmptyMoodSummary());
+        setSelectedMoodClientUserId(null);
         setPayments(paymentData.items);
         setAvailabilityRules([]);
         setAvailabilitySlots([]);
         setAvailabilityExceptions([]);
         setFiles([]);
+        setPsychologistAnalytics(null);
         setPsychologistWorkspaceProfile(null);
         setSpecializationsCatalog([]);
         setNotificationPreferences(preferenceData);
@@ -176,7 +282,7 @@ export function DashboardClient() {
 
       if (user.roles.includes("psychologist")) {
         const slotQuery = buildAvailabilitySlotsQuery(availabilitySlotFilters);
-        const [bookingData, notificationData, exceptionData, ruleData, slotData, preferenceData, complaintData, fileData, psychologistProfileData, specializationsData, twoFactorStatusData] =
+        const [bookingData, notificationData, exceptionData, ruleData, slotData, preferenceData, complaintData, fileData, psychologistProfileData, specializationsData, twoFactorStatusData, homeworkData, analyticsData] =
           await Promise.all([
           request<BookingListResponse>("/bookings/psychologist/me"),
           request<NotificationListResponse>("/notifications/me?limit=6"),
@@ -189,13 +295,23 @@ export function DashboardClient() {
           request<PsychologistWorkspaceProfile>("/psychologists/me"),
           request<Specialization[]>("/catalog/specializations", undefined, { auth: false }),
           request<TwoFactorStatus>("/auth/2fa"),
+          request<HomeworkTasksResponse>("/homework-tasks/psychologist/me?limit=12"),
+          request<PsychologistAnalyticsResponse>("/analytics/psychologist/me?months=6"),
         ]);
         setBookings(bookingData.items);
+        setClientSessionPackages([]);
+        setMoodEntries([]);
+        setMoodSummary(createEmptyMoodSummary());
+        setClientHomeworkTasks([]);
+        setPsychologistHomeworkTasks(homeworkData.items);
+        setChatMessages([]);
+        setChatUnreadCount(0);
         setPayments([]);
         setAvailabilityRules(ruleData);
         setAvailabilitySlots(slotData.items);
         setAvailabilityExceptions(exceptionData);
         setFiles(fileData.items);
+        setPsychologistAnalytics(analyticsData);
         setPsychologistWorkspaceProfile(psychologistProfileData);
         setSpecializationsCatalog(specializationsData);
         setNotificationPreferences(preferenceData);
@@ -210,11 +326,23 @@ export function DashboardClient() {
       }
 
       setBookings([]);
+      setClientSessionPackages([]);
+      setMoodEntries([]);
+      setMoodSummary(createEmptyMoodSummary());
+      setClientHomeworkTasks([]);
+      setPsychologistHomeworkTasks([]);
+      setChatMessages([]);
+      setChatUnreadCount(0);
+      setPsychologistMoodClient(null);
+      setPsychologistMoodEntries([]);
+      setPsychologistMoodSummary(createEmptyMoodSummary());
+      setSelectedMoodClientUserId(null);
       setPayments([]);
       setAvailabilityRules([]);
       setAvailabilitySlots([]);
       setAvailabilityExceptions([]);
       setFiles([]);
+      setPsychologistAnalytics(null);
       setPsychologistWorkspaceProfile(null);
       setSpecializationsCatalog([]);
       setComplaints([]);
@@ -359,6 +487,70 @@ export function DashboardClient() {
       body: JSON.stringify(input),
     });
     await loadData();
+  }
+
+  async function saveMoodEntry(input: {
+    recordedForDate: string;
+    moodScore: number;
+    emotions: string[];
+    note?: string;
+  }) {
+    await request<MoodEntryRecord>("/mood-entries/me", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+    await loadData();
+  }
+
+  async function createHomeworkTask(input: {
+    consultationId: string;
+    title: string;
+    description?: string;
+    dueAt?: string;
+  }) {
+    await request<HomeworkTaskRecord>("/homework-tasks/psychologist/me", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+    await loadData();
+  }
+
+  async function updateClientHomeworkTask(
+    taskId: string,
+    input: {
+      status?: "assigned" | "completed";
+      clientNote?: string;
+    },
+  ) {
+    await request<HomeworkTaskRecord>(`/homework-tasks/me/${taskId}`, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    });
+    await loadData();
+  }
+
+  async function updatePsychologistHomeworkTask(
+    taskId: string,
+    input: {
+      title?: string;
+      description?: string;
+      dueAt?: string;
+      status?: "assigned" | "cancelled";
+    },
+  ) {
+    await request<HomeworkTaskRecord>(`/homework-tasks/psychologist/me/${taskId}`, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    });
+    await loadData();
+  }
+
+  async function sendChatMessage(input: { counterpartUserId: string; body: string }) {
+    await request<ChatMessageRecord>("/messages", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+    await loadChatThread(input.counterpartUserId, false);
   }
 
   async function createAvailabilityRule(input: {
@@ -509,6 +701,20 @@ export function DashboardClient() {
     await loadData();
   }
 
+  const loadChatThread = useEffectEvent(async (counterpartUserId: string, markAsRead = false) => {
+    const thread = await request<ChatThreadResponse>(`/messages/me/thread/${counterpartUserId}?limit=40`);
+    setChatMessages(thread.items);
+    setChatUnreadCount(thread.unreadCount);
+    setSelectedChatCounterpartLabel(thread.conversation.counterpart.displayName);
+
+    if (markAsRead && thread.unreadCount > 0) {
+      await request<{ updatedCount: number }>(`/messages/me/thread/${counterpartUserId}/read`, {
+        method: "POST",
+      });
+      setChatUnreadCount(0);
+    }
+  });
+
   useEffect(() => {
     if (!ready || !user) {
       return;
@@ -518,6 +724,91 @@ export function DashboardClient() {
       void loadData();
     });
   }, [ready, user, availabilitySlotFiltersKey]);
+
+  useEffect(() => {
+    if (!user) {
+      setSelectedChatCounterpartUserId(null);
+      setSelectedChatCounterpartLabel(null);
+      setChatMessages([]);
+      setChatUnreadCount(0);
+      return;
+    }
+
+    const counterparts = collectChatCounterparts(bookings, user.roles);
+
+    setSelectedChatCounterpartUserId((current) => {
+      if (current && counterparts.some((item) => item.userId === current)) {
+        return current;
+      }
+
+      return counterparts[0]?.userId ?? null;
+    });
+  }, [bookings, user]);
+
+  useEffect(() => {
+    if (!ready || !user) {
+      return;
+    }
+
+    if (!selectedChatCounterpartUserId) {
+      setChatMessages([]);
+      setChatUnreadCount(0);
+      setSelectedChatCounterpartLabel(null);
+      return;
+    }
+
+    startTransition(() => {
+      void loadChatThread(selectedChatCounterpartUserId, true).catch((nextError: Error) => {
+        setError(nextError.message);
+      });
+    });
+  }, [ready, user, selectedChatCounterpartUserId]);
+
+  const loadPsychologistMoodEntries = useEffectEvent(async (clientUserId: string) => {
+    const moodData = await request<MoodEntriesResponse>(`/mood-entries/psychologist/client/${clientUserId}?limit=14`);
+    setPsychologistMoodClient(moodData.client);
+    setPsychologistMoodEntries(moodData.items);
+    setPsychologistMoodSummary(moodData.summary);
+  });
+
+  useEffect(() => {
+    if (!user?.roles.includes("psychologist")) {
+      setSelectedMoodClientUserId(null);
+      setPsychologistMoodClient(null);
+      setPsychologistMoodEntries([]);
+      setPsychologistMoodSummary(createEmptyMoodSummary());
+      return;
+    }
+
+    const clients = collectPsychologistMoodClients(bookings);
+
+    setSelectedMoodClientUserId((current) => {
+      if (current && clients.some((item) => item.userId === current)) {
+        return current;
+      }
+
+      return clients[0]?.userId ?? null;
+    });
+  }, [bookings, user]);
+
+  useEffect(() => {
+    if (!ready || !user?.roles.includes("psychologist")) {
+      return;
+    }
+
+    if (!selectedMoodClientUserId) {
+      setPsychologistMoodClient(null);
+      setPsychologistMoodEntries([]);
+      setPsychologistMoodSummary(createEmptyMoodSummary());
+      return;
+    }
+
+    startTransition(() => {
+      void loadPsychologistMoodEntries(selectedMoodClientUserId).catch((nextError: Error) => {
+        setError(nextError.message);
+      });
+    });
+  }, [ready, user, selectedMoodClientUserId]);
 
   useEffect(() => {
     if (!ready || !user || !accessToken) {
@@ -546,6 +837,12 @@ export function DashboardClient() {
     socket.on("domain_event", (event: RealtimeDomainEvent) => {
       setRealtimeEvents((current) => [event, ...current].slice(0, 5));
       void loadData();
+
+      if (event.name === "chat.message.created" && selectedChatCounterpartUserId) {
+        void loadChatThread(selectedChatCounterpartUserId, false).catch((nextError: Error) => {
+          setError(nextError.message);
+        });
+      }
     });
 
     socket.on("ws.expired", () => {
@@ -559,10 +856,10 @@ export function DashboardClient() {
     return () => {
       socket.disconnect();
     };
-  }, [ready, user, accessToken]);
+  }, [ready, user, accessToken, selectedChatCounterpartUserId]);
 
   if (!ready) {
-    return <section className="page">Проверяем сессию...</section>;
+    return <section className="page">Проверяем доступ к вашему кабинету...</section>;
   }
 
   if (!user) {
@@ -570,8 +867,7 @@ export function DashboardClient() {
       <section className="page empty-state">
         <h1 className="section-title">Войдите, чтобы открыть кабинет</h1>
         <p className="section-text">
-          Кабинет подключён к текущему `api-core` и показывает бронирования, тестовые оплаты и
-          доступ к сессии.
+          После входа вы увидите ваши консультации, статусы оплат, уведомления и быстрый доступ к сессиям.
         </p>
         <Link className="button button-primary" href="/auth">
           открыть вход
@@ -595,9 +891,29 @@ export function DashboardClient() {
         </button>
       </div>
 
+      <div className="dashboard-hero surface">
+        <div className="dashboard-hero-copy">
+          <p className="caption">единый центр управления</p>
+          <h2 className="card-title">Более чистый и современный кабинет</h2>
+          <p className="section-text">
+            Мы усилили визуальную иерархию, чтобы важные действия, статусы и уведомления читались быстрее и спокойнее.
+          </p>
+        </div>
+        <div className="dashboard-hero-stats">
+          <div className="dashboard-hero-stat">
+            <span className="caption">роль</span>
+            <strong>{user.roles.map(humanizeCode).join(", ")}</strong>
+          </div>
+          <div className="dashboard-hero-stat">
+            <span className="caption">realtime</span>
+            <strong>{humanizeCode(realtimeState)}</strong>
+          </div>
+        </div>
+      </div>
+
       {error ? <div className="notice notice-error">{error}</div> : null}
 
-      <div className="summary-grid">
+      <div className="summary-grid dashboard-summary-grid">
         <div className="summary-card">
           <span className="caption">роли</span>
           <strong>{user.roles.map(humanizeCode).join(", ")}</strong>
@@ -629,16 +945,46 @@ export function DashboardClient() {
       </div>
 
       {loading ? (
-        <div className="surface">Загружаем данные кабинета...</div>
+        <div className="surface">Собираем актуальные данные кабинета...</div>
       ) : (
         <div className="dashboard-grid">
           <div className="stack">
+            {user.roles.includes("client") ? (
+              <MoodDiaryPanel entries={moodEntries} onSave={saveMoodEntry} summary={moodSummary} />
+            ) : null}
+
+            {user.roles.includes("client") ? <ClientSessionPackagesPanel items={clientSessionPackages} /> : null}
+
+            {user.roles.includes("client") ? (
+              <ClientHomeworkPanel onUpdate={updateClientHomeworkTask} tasks={clientHomeworkTasks} />
+            ) : null}
+
+            {(user.roles.includes("client") || user.roles.includes("psychologist")) ? (
+              <ChatPanel
+                counterparts={collectChatCounterparts(bookings, user.roles)}
+                enableCrisisSupport={user.roles.includes("client")}
+                messages={chatMessages}
+                onSelectCounterpartUserId={setSelectedChatCounterpartUserId}
+                onSend={sendChatMessage}
+                selectedCounterpartLabel={selectedChatCounterpartLabel}
+                selectedCounterpartUserId={selectedChatCounterpartUserId}
+                unreadCount={chatUnreadCount}
+              />
+            ) : null}
+
             {user.roles.includes("psychologist") ? (
               <>
+                <PsychologistAnalyticsPanel analytics={psychologistAnalytics} />
                 <PsychologistProfilePanel
                   onSave={savePsychologistProfile}
                   profile={psychologistWorkspaceProfile}
                   specializations={specializationsCatalog}
+                />
+                <PsychologistHomeworkPanel
+                  completedBookings={bookings.filter((booking) => booking.status === "completed")}
+                  onCreate={createHomeworkTask}
+                  onUpdate={updatePsychologistHomeworkTask}
+                  tasks={psychologistHomeworkTasks}
                 />
                 <AvailabilityRulesPanel
                   onCreate={createAvailabilityRule}
@@ -706,6 +1052,24 @@ export function DashboardClient() {
                     </div>
                   ) : null}
 
+                  {booking.packageUsage && !booking.packageUsage.releasedAt ? (
+                    <div className="surface surface-muted">
+                      <div className="meta-row">
+                        <strong>Пакет сессий</strong>
+                        <span className={`status-badge status-${booking.packageUsage.sessionPackage.status}`}>
+                          {humanizeCode(booking.packageUsage.sessionPackage.status)}
+                        </span>
+                      </div>
+                      <div className="meta-row">
+                        <span>{booking.packageUsage.sessionPackage.title}</span>
+                        <span>
+                          Осталось {booking.packageUsage.sessionPackage.remainingSessions} из{" "}
+                          {booking.packageUsage.sessionPackage.totalSessions}
+                        </span>
+                      </div>
+                    </div>
+                  ) : null}
+
                   {user.roles.includes("client") ? (
                     <PaymentActions booking={booking} onUpdated={() => void loadData()} />
                   ) : null}
@@ -721,6 +1085,15 @@ export function DashboardClient() {
                           открыть страницу сессии
                         </Link>
                       ) : null}
+                    </div>
+                  ) : null}
+
+                  {booking.packageUsage && !booking.packageUsage.releasedAt && !booking.latestPayment ? (
+                    <div className="meta-row">
+                      <span>доступ к сессии будет открыт по активному пакету без отдельного платежа</span>
+                      <Link className="muted-link" href={`/session/${booking.id}`}>
+                        страница сессии
+                      </Link>
                     </div>
                   ) : null}
 
@@ -779,6 +1152,17 @@ export function DashboardClient() {
                 onCreate={createAvailabilityException}
                 onDelete={deleteAvailabilityException}
                 onToggle={toggleAvailabilityException}
+              />
+            ) : null}
+
+            {user.roles.includes("psychologist") ? (
+              <PsychologistMoodPanel
+                client={psychologistMoodClient}
+                clients={collectPsychologistMoodClients(bookings)}
+                entries={psychologistMoodEntries}
+                onSelectClientUserId={setSelectedMoodClientUserId}
+                selectedClientUserId={selectedMoodClientUserId}
+                summary={psychologistMoodSummary}
               />
             ) : null}
 

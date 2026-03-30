@@ -1,6 +1,6 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { BadRequestException, ConflictException, NotFoundException } from "@nestjs/common";
-import { ConsultationStatus, NotificationChannel, Prisma } from "@prisma/client";
+import { ConsultationStatus, NotificationChannel, Prisma } from "prisma-client-generated";
 import { AuditService } from "../audit/audit.service";
 import { NotificationsService } from "../notifications/notifications.service";
 import { PrismaService } from "../prisma/prisma.service";

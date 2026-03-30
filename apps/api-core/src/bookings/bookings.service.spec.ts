@@ -9,7 +9,7 @@ import {
   AppointmentSlotStatus,
   ConsultationStatus,
   PsychologistApprovalStatus,
-} from '@prisma/client';
+} from 'prisma-client-generated';
 import { BookingsService } from './bookings.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';

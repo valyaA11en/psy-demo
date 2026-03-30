@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { Test, TestingModule } from "@nestjs/testing";
 import { BadRequestException, NotFoundException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { NotificationChannel } from "@prisma/client";
+import { NotificationChannel } from "prisma-client-generated";
 import type { Request } from "express";
 import { AuditService } from "../audit/audit.service";
 import { PrismaService } from "../prisma/prisma.service";

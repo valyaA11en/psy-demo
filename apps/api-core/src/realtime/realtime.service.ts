@@ -61,6 +61,8 @@ export class RealtimeService implements OnModuleDestroy {
         requiresRefetch: input.payload.requiresRefetch ?? true,
         source: input.payload.source ?? "api-core",
         consultationId: input.payload.consultationId,
+        messageId: input.payload.messageId,
+        counterpartUserId: input.payload.counterpartUserId,
         paymentId: input.payload.paymentId,
         status: input.payload.status,
         reasonCode: input.payload.reasonCode,

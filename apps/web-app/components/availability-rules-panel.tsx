@@ -204,6 +204,17 @@ export function AvailabilityRulesPanel({ rules, onCreate, onDelete, onUpdate }: 
         </div>
       </div>
 
+      <div className="panel-intro-grid">
+        <div className="panel-intro-card">
+          <p className="caption">ритм недели</p>
+          <strong>Настройте базовые окна, а не каждый слот вручную</strong>
+        </div>
+        <div className="panel-intro-card">
+          <p className="caption">контроль</p>
+          <strong>Активные правила сразу влияют на будущую генерацию расписания</strong>
+        </div>
+      </div>
+
       <form className="stack" onSubmit={handleCreate}>
         <div className="form-grid two-columns">
           <label className="field">
@@ -307,7 +318,7 @@ export function AvailabilityRulesPanel({ rules, onCreate, onDelete, onUpdate }: 
           <button className="button button-primary" disabled={pending} type="submit">
             Добавить правило
           </button>
-          <span className="section-text">Для MVP достаточно 1-2 правил на рабочие дни и отдельного окна на выходные.</span>
+          <span className="section-text">Обычно достаточно 1–2 базовых правил на будни и отдельного окна на выходные.</span>
         </div>
       </form>
 
@@ -320,7 +331,7 @@ export function AvailabilityRulesPanel({ rules, onCreate, onDelete, onUpdate }: 
       ) : (
         <div className="stack compact-stack">
           {sortedRules.map((rule) => (
-            <div className="surface surface-muted stack compact-stack" key={rule.id}>
+            <div className="surface surface-muted stack compact-stack rule-card" key={rule.id}>
               <div className="section-head">
                 <div>
                   <strong>

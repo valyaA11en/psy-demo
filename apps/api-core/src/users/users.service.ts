@@ -1,5 +1,5 @@
 import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
-import { PsychologistApprovalStatus } from "@prisma/client";
+import { PsychologistApprovalStatus } from "prisma-client-generated";
 import type { Request } from "express";
 import { AuditService } from "../audit/audit.service";
 import { PrismaService } from "../prisma/prisma.service";

@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from "@nestjs/swagger";
-import { Weekday } from "@prisma/client";
+import { Weekday } from "prisma-client-generated";
 import { IsBoolean, IsEnum, IsInt, IsOptional, IsString, Matches, Max, Min } from "class-validator";
 
 export class UpdateAvailabilityRuleDto {

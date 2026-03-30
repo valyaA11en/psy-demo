@@ -65,11 +65,11 @@ export function AuthPanel() {
           if (mode === "login") {
             if ("requiresTwoFactor" in result && result.requiresTwoFactor) {
               setLoginChallenge(result);
-              setSuccess("Введите код из приложения или recovery code, чтобы завершить вход.");
+              setSuccess("Введите код из приложения или recovery code, чтобы безопасно завершить вход.");
               return;
             }
 
-            setSuccess("Сессия начата.");
+            setSuccess("Вы успешно вошли в кабинет.");
             router.push("/dashboard");
             router.refresh();
             return;
@@ -143,17 +143,17 @@ export function AuthPanel() {
     return (
       <section className="auth-layout">
         <div className="auth-card">
-          <p className="caption">Вы уже вошли как</p>
+          <p className="caption">Вы уже в безопасном пространстве</p>
           <h1 className="section-title">{user.email}</h1>
           <p className="section-text">
             Текущие роли: <strong>{user.roles.map(humanizeCode).join(", ")}</strong>
           </p>
           <div className="inline-actions">
             <Link className="button button-primary" href="/dashboard">
-              открыть кабинет
+              продолжить путь
             </Link>
             <Link className="button button-ghost" href="/">
-              вернуться в каталог
+              выбрать специалиста
             </Link>
           </div>
         </div>
@@ -164,6 +164,21 @@ export function AuthPanel() {
   return (
     <section className="auth-layout">
       <div className="auth-card">
+        <div className="auth-hero">
+          <div className="auth-hero-copy">
+            <p className="caption">спокойный и безопасный вход</p>
+            <h1 className="section-title">Современный вход без визуального шума</h1>
+            <p className="section-text">
+              Мы упростили сценарий входа и регистрации, чтобы путь в кабинет ощущался ясным, аккуратным и
+              предсказуемым.
+            </p>
+          </div>
+          <div className="auth-hero-badge">
+            <span className="caption">доступ</span>
+            <strong>{mode === "login" ? "в личный кабинет" : "к созданию аккаунта"}</strong>
+          </div>
+        </div>
+
         <div className="auth-tabs" role="tablist" aria-label="Режим авторизации">
           <button
             className={`auth-tab${mode === "login" ? " auth-tab-active" : ""}`}
@@ -173,7 +188,7 @@ export function AuthPanel() {
             }}
             type="button"
           >
-            вход
+            вход в кабинет
           </button>
           <button
             className={`auth-tab${mode === "register" ? " auth-tab-active" : ""}`}
@@ -183,19 +198,19 @@ export function AuthPanel() {
             }}
             type="button"
           >
-            регистрация
+            создать аккаунт
           </button>
         </div>
 
         {mode === "login" && loginChallenge ? (
           <div className="stack">
             <div className="surface surface-muted">
-              <p className="caption">Второй фактор</p>
+              <p className="caption">Дополнительная защита аккаунта</p>
               <p className="section-text">
-                Для <strong>{email || "текущего аккаунта"}</strong> требуется дополнительное подтверждение.
+                Для <strong>{email || "текущего аккаунта"}</strong> нужно дополнительное подтверждение входа.
               </p>
               <p className="section-text">
-                Challenge действует до <strong>{formatCompactDateTime(loginChallenge.challengeExpiresAt)}</strong>.
+                Код подтверждения действует до <strong>{formatCompactDateTime(loginChallenge.challengeExpiresAt)}</strong>.
               </p>
             </div>
 
@@ -328,19 +343,19 @@ export function AuthPanel() {
           {mode === "login" && loginChallenge ? (
             <>
               <button className="button button-primary" disabled={pending} onClick={handleVerifyTwoFactor} type="button">
-                {pending ? "обработка..." : "подтвердить вход"}
+              {pending ? "проверяем..." : "подтвердить вход"}
               </button>
               <button className="button button-secondary" disabled={pending} onClick={resetLoginChallenge} type="button">
-                назад к паролю
+                вернуться к паролю
               </button>
             </>
           ) : (
             <button className="button button-primary" disabled={pending} onClick={handleSubmit} type="button">
-              {pending ? "обработка..." : mode === "login" ? "войти" : "создать аккаунт"}
+              {pending ? "обрабатываем..." : mode === "login" ? "войти" : "создать аккаунт"}
             </button>
           )}
           <Link className="button button-ghost" href="/">
-            вернуться в каталог
+            к выбору психолога
           </Link>
         </div>
 
@@ -352,7 +367,7 @@ export function AuthPanel() {
               onClick={handleResendVerification}
               type="button"
             >
-              отправить письмо повторно
+              отправить письмо ещё раз
             </button>
           </div>
         ) : null}
@@ -361,14 +376,14 @@ export function AuthPanel() {
         {success ? <div className="notice notice-success">{success}</div> : null}
         {verificationLink ? (
           <div className="surface surface-muted">
-            <p className="caption">Debug verification link</p>
+            <p className="caption">Техническая ссылка подтверждения (dev)</p>
             <Link href={verificationLink}>{verificationLink}</Link>
           </div>
         ) : null}
 
         {showDemoCredentials ? (
           <div className="surface surface-muted">
-            <p className="caption">Локальные demo-аккаунты</p>
+            <p className="caption">Локальные тестовые аккаунты</p>
             <ul className="list-block">
               <li>`client@example.com / Client12345!`</li>
               <li>`psychologist@example.com / Psychologist123!`</li>
@@ -376,6 +391,24 @@ export function AuthPanel() {
             </ul>
           </div>
         ) : null}
+
+        <div className="auth-benefits-grid">
+          <div className="auth-benefit-card">
+            <p className="caption">01</p>
+            <strong>Деликатный тон</strong>
+            <p className="section-text">Меньше тревожных формулировок, больше понятных действий и статусов.</p>
+          </div>
+          <div className="auth-benefit-card">
+            <p className="caption">02</p>
+            <strong>Прозрачная защита</strong>
+            <p className="section-text">2FA и подтверждение email встроены в поток без ощущения перегруженности.</p>
+          </div>
+          <div className="auth-benefit-card">
+            <p className="caption">03</p>
+            <strong>Фокус на следующем шаге</strong>
+            <p className="section-text">Каждый экран подсказывает, что делать дальше, без лишнего визуального шума.</p>
+          </div>
+        </div>
       </div>
     </section>
   );

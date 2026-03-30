@@ -4,7 +4,7 @@ import {
   NotificationChannel,
   Prisma,
   PsychologistApprovalStatus,
-} from "@prisma/client";
+} from "prisma-client-generated";
 import type { Request } from "express";
 import { AuditService } from "../audit/audit.service";
 import type { CreateNotificationInput } from "../notifications/interfaces/create-notification-input.interface";

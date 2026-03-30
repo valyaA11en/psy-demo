@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import { NotificationChannel, NotificationStatus, Prisma } from "@prisma/client";
+import { NotificationChannel, NotificationStatus, Prisma } from "prisma-client-generated";
 import {
   BadRequestException,
   ForbiddenException,
