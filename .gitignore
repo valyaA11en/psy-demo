@@ -33,6 +33,7 @@ apps/web-app/.env
 apps/web-app/.next/
 apps/web-app/.next-runtime/
 apps/web-app/.next-build-cache/
+**/.gocache/
 services/booking-slot-worker/.env
 services/notification-worker/.env
 apps/admin-php/storage/*.sqlite
