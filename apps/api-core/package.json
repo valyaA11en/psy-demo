@@ -4,7 +4,7 @@
   "description": "Основной NestJS API для аутентификации, каталога, бронирований, оплат, файлов, consent и аудита.",
   "main": "dist/src/main.js",
   "scripts": {
-    "build": "prisma generate && nest build",
+    "build": "nest build",
     "start": "node dist/src/main.js",
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",

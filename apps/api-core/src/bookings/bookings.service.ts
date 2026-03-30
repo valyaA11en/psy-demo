@@ -1,10 +1,11 @@
 import {
   AppointmentSlotStatus,
+  ClientSessionPackageStatus,
   ConsultationStatus,
   NotificationChannel,
   Prisma,
   PsychologistApprovalStatus,
-} from "@prisma/client";
+} from "prisma-client-generated";
 import {
   BadRequestException,
   ConflictException,
@@ -83,6 +84,23 @@ const bookingListInclude = {
       text: true,
       status: true,
       createdAt: true,
+    },
+  },
+  sessionPackageUsage: {
+    select: {
+      id: true,
+      releasedAt: true,
+      sessionPackage: {
+        select: {
+          id: true,
+          title: true,
+          totalSessions: true,
+          remainingSessions: true,
+          status: true,
+          currency: true,
+          discountPercent: true,
+        },
+      },
     },
   },
 } satisfies Prisma.ConsultationInclude;
@@ -226,6 +244,51 @@ export class BookingsService {
           },
         });
 
+        if (dto.sessionPackageId) {
+          const sessionPackage = await tx.clientSessionPackage.findFirst({
+            where: {
+              id: dto.sessionPackageId,
+              clientUserId,
+              psychologistUserId: slot.psychologistProfileId,
+              status: ClientSessionPackageStatus.active,
+              remainingSessions: {
+                gt: 0,
+              },
+            },
+            select: {
+              id: true,
+              remainingSessions: true,
+              totalSessions: true,
+            },
+          });
+
+          if (!sessionPackage) {
+            throw new ConflictException("Выбранный пакет недоступен для этой консультации");
+          }
+
+          const nextRemainingSessions = sessionPackage.remainingSessions - 1;
+
+          await tx.clientSessionPackage.update({
+            where: {
+              id: sessionPackage.id,
+            },
+            data: {
+              remainingSessions: nextRemainingSessions,
+              status:
+                nextRemainingSessions === 0
+                  ? ClientSessionPackageStatus.completed
+                  : ClientSessionPackageStatus.active,
+            },
+          });
+
+          await tx.clientSessionPackageUsage.create({
+            data: {
+              packageId: sessionPackage.id,
+              consultationId: consultation.id,
+            },
+          });
+        }
+
         await tx.consultationStatusHistory.create({
           data: {
             consultationId: consultation.id,
@@ -255,6 +318,7 @@ export class BookingsService {
           slotId: dto.slotId,
           psychologistUserId: created.psychologistUserId,
           scheduledAt: created.scheduledAt.toISOString(),
+          sessionPackageId: dto.sessionPackageId ?? null,
         },
       });
 
@@ -356,9 +420,9 @@ export class BookingsService {
     const reasonCode = dto.reasonCode?.trim() || this.defaultCancellationReason(actorRole);
     const now = new Date();
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.consultation.update({
-        where: {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.consultation.update({
+          where: {
           id: bookingId,
         },
         data: {
@@ -380,9 +444,9 @@ export class BookingsService {
         },
       });
 
-      await tx.appointmentSlot.updateMany({
-        where: {
-          id: booking.slotId,
+        await tx.appointmentSlot.updateMany({
+          where: {
+            id: booking.slotId,
           status: AppointmentSlotStatus.booked,
         },
         data: {
@@ -392,6 +456,28 @@ export class BookingsService {
               : AppointmentSlotStatus.cancelled,
         },
       });
+
+      if (booking.sessionPackageUsage && !booking.sessionPackageUsage.releasedAt) {
+        await tx.clientSessionPackageUsage.update({
+          where: {
+            consultationId: bookingId,
+          },
+          data: {
+            releasedAt: now,
+          },
+        });
+
+        const nextRemainingSessions = booking.sessionPackageUsage.sessionPackage.remainingSessions + 1;
+        await tx.clientSessionPackage.update({
+          where: {
+            id: booking.sessionPackageUsage.sessionPackage.id,
+          },
+          data: {
+            remainingSessions: nextRemainingSessions,
+            status: ClientSessionPackageStatus.active,
+          },
+        });
+      }
     });
 
     await this.auditService.log({
@@ -812,6 +898,23 @@ export class BookingsService {
             status: booking.payments[0].status,
             paidAt: booking.payments[0].paidAt ? booking.payments[0].paidAt.toISOString() : null,
             createdAt: booking.payments[0].createdAt.toISOString(),
+          }
+        : null,
+      packageUsage: booking.sessionPackageUsage
+        ? {
+            id: booking.sessionPackageUsage.id,
+            releasedAt: booking.sessionPackageUsage.releasedAt
+              ? booking.sessionPackageUsage.releasedAt.toISOString()
+              : null,
+            sessionPackage: {
+              id: booking.sessionPackageUsage.sessionPackage.id,
+              title: booking.sessionPackageUsage.sessionPackage.title,
+              totalSessions: booking.sessionPackageUsage.sessionPackage.totalSessions,
+              remainingSessions: booking.sessionPackageUsage.sessionPackage.remainingSessions,
+              status: booking.sessionPackageUsage.sessionPackage.status,
+              currency: booking.sessionPackageUsage.sessionPackage.currency,
+              discountPercent: booking.sessionPackageUsage.sessionPackage.discountPercent,
+            },
           }
         : null,
       review: booking.review

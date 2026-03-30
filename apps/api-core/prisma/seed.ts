@@ -1,14 +1,16 @@
 import {
   AppointmentSlotSource,
   AppointmentSlotStatus,
+  ClientSessionPackageStatus,
   ConsultationStatus,
+  HomeworkTaskStatus,
   NotificationChannel,
   NotificationStatus,
   PrismaClient,
   PsychologistApprovalStatus,
   UserStatus,
   Weekday,
-} from "@prisma/client";
+} from "prisma-client-generated";
 import bcrypt from "bcryptjs";
 import { DateTime } from "luxon";
 
@@ -46,6 +48,10 @@ async function assignRole(userId: string, roleId: string) {
       roleId,
     },
   });
+}
+
+function toUtcDateOnly(value: DateTime) {
+  return new Date(`${value.toFormat("yyyy-MM-dd")}T00:00:00.000Z`);
 }
 
 async function main() {
@@ -267,6 +273,25 @@ async function main() {
     },
   });
 
+  await prisma.clientSessionPackage.deleteMany({
+    where: {
+      OR: [
+        {
+          clientUserId: client.id,
+        },
+        {
+          psychologistUserId: psychologist.id,
+        },
+      ],
+    },
+  });
+
+  await prisma.sessionPackageOffer.deleteMany({
+    where: {
+      psychologistUserId: psychologist.id,
+    },
+  });
+
   await prisma.review.deleteMany({
     where: {
       psychologistUserId: psychologist.id,
@@ -413,6 +438,49 @@ async function main() {
     },
   });
 
+  const focusedOffer = await prisma.sessionPackageOffer.create({
+    data: {
+      psychologistUserId: psychologist.id,
+      title: "Фокус на 4 встречи",
+      description: "Подходит для краткосрочной работы, когда нужен ритм и понятный план нескольких встреч подряд.",
+      sessionCount: 4,
+      discountPercent: 10,
+      totalPrice: 12600,
+      currency: "RUB",
+      isActive: true,
+    },
+  });
+
+  await prisma.sessionPackageOffer.create({
+    data: {
+      psychologistUserId: psychologist.id,
+      title: "Поддержка на 8 встреч",
+      description: "Для более длинного цикла работы с тревогой, выгоранием и устойчивыми паттернами стресса.",
+      sessionCount: 8,
+      discountPercent: 15,
+      totalPrice: 23800,
+      currency: "RUB",
+      isActive: true,
+    },
+  });
+
+  await prisma.clientSessionPackage.create({
+    data: {
+      offerId: focusedOffer.id,
+      clientUserId: client.id,
+      psychologistUserId: psychologist.id,
+      title: focusedOffer.title,
+      totalSessions: focusedOffer.sessionCount,
+      remainingSessions: focusedOffer.sessionCount,
+      discountPercent: focusedOffer.discountPercent,
+      priceAmount: focusedOffer.totalPrice,
+      currency: focusedOffer.currency,
+      status: ClientSessionPackageStatus.active,
+      idempotencyKey: "seed-session-package-0001",
+      purchasedAt: localBase.minus({ days: 2 }).set({ hour: 10, minute: 15 }).toUTC().toJSDate(),
+    },
+  });
+
   await prisma.consultationStatusHistory.create({
     data: {
       consultationId: completedConsultation.id,
@@ -465,6 +533,110 @@ async function main() {
       ratingAvg: 5,
       reviewsCount: 1,
     },
+  });
+
+  await prisma.moodEntry.deleteMany({
+    where: {
+      clientUserId: client.id,
+    },
+  });
+
+  await prisma.moodEntry.createMany({
+    data: [
+      {
+        clientUserId: client.id,
+        recordedForDate: toUtcDateOnly(localBase.minus({ days: 6 })),
+        moodScore: 4,
+        emotionsJson: ["тревога", "усталость"],
+        note: "Сложно было собраться после насыщенной рабочей недели.",
+      },
+      {
+        clientUserId: client.id,
+        recordedForDate: toUtcDateOnly(localBase.minus({ days: 5 })),
+        moodScore: 5,
+        emotionsJson: ["напряжение", "надежда"],
+        note: "После консультации стало чуть спокойнее и понятнее, что делать дальше.",
+      },
+      {
+        clientUserId: client.id,
+        recordedForDate: toUtcDateOnly(localBase.minus({ days: 3 })),
+        moodScore: 6,
+        emotionsJson: ["спокойствие"],
+        note: "Получилось выделить время на отдых и прогулку.",
+      },
+      {
+        clientUserId: client.id,
+        recordedForDate: toUtcDateOnly(localBase.minus({ days: 1 })),
+        moodScore: 7,
+        emotionsJson: ["уверенность", "интерес"],
+        note: "Было больше энергии, чем обычно. Помогла структура дня.",
+      },
+    ],
+  });
+
+  await prisma.homeworkTask.deleteMany({
+    where: {
+      OR: [
+        {
+          clientUserId: client.id,
+        },
+        {
+          psychologistUserId: psychologist.id,
+        },
+      ],
+    },
+  });
+
+  await prisma.homeworkTask.create({
+    data: {
+      consultationId: completedConsultation.id,
+      clientUserId: client.id,
+      psychologistUserId: psychologist.id,
+      title: "Вести короткий дневник эмоций три раза до следующей встречи",
+      description: "Отмечайте ключевую эмоцию дня, телесные ощущения и что помогло снизить напряжение.",
+      dueAt: localBase.plus({ days: 2 }).set({ hour: 20, minute: 0 }).toUTC().toJSDate(),
+      status: HomeworkTaskStatus.assigned,
+    },
+  });
+
+  await prisma.chatMessage.deleteMany({
+    where: {
+      OR: [
+        {
+          clientUserId: client.id,
+        },
+        {
+          psychologistUserId: psychologist.id,
+        },
+      ],
+    },
+  });
+
+  await prisma.chatMessage.createMany({
+    data: [
+      {
+        clientUserId: client.id,
+        psychologistUserId: psychologist.id,
+        senderUserId: psychologist.id,
+        body: "После встречи попробуйте коротко фиксировать эмоцию дня и то, что помогло снизить напряжение.",
+        createdAt: localBase.minus({ days: 4 }).set({ hour: 18, minute: 15 }).toUTC().toJSDate(),
+      },
+      {
+        clientUserId: client.id,
+        psychologistUserId: psychologist.id,
+        senderUserId: client.id,
+        body: "Хорошо, сделаю. Уже вчера заметила, что прогулка помогает быстрее успокоиться.",
+        createdAt: localBase.minus({ days: 4 }).set({ hour: 19, minute: 5 }).toUTC().toJSDate(),
+      },
+      {
+        clientUserId: client.id,
+        psychologistUserId: psychologist.id,
+        senderUserId: psychologist.id,
+        body: "Отличное наблюдение. На следующей встрече обсудим, в какие моменты это работает лучше всего.",
+        createdAt: localBase.minus({ days: 3 }).set({ hour: 10, minute: 20 }).toUTC().toJSDate(),
+        readAt: localBase.minus({ days: 3 }).set({ hour: 11, minute: 0 }).toUTC().toJSDate(),
+      },
+    ],
   });
 
   await prisma.consentRecord.deleteMany({

@@ -11,4 +11,9 @@ export class CreateBookingDto {
   @IsString()
   @MaxLength(1000)
   clientMessage?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsUUID()
+  sessionPackageId?: string;
 }

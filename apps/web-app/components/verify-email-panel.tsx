@@ -14,7 +14,7 @@ export function VerifyEmailPanel() {
   const token = searchParams.get("token") ?? "";
   const [state, setState] = useState<VerificationState>(token ? "pending" : "error");
   const [message, setMessage] = useState(
-    token ? "Подтверждаем email и создаём сессию..." : "Ссылка подтверждения не содержит токен.",
+    token ? "Подтверждаем email и готовим ваш личный кабинет..." : "Ссылка подтверждения не содержит токен.",
   );
 
   useEffect(() => {
@@ -26,7 +26,7 @@ export function VerifyEmailPanel() {
       void verifyEmail(token)
         .then(() => {
           setState("success");
-          setMessage("Email подтверждён. Перенаправляем в личный кабинет...");
+          setMessage("Email подтверждён. Перенаправляем в ваш кабинет...");
           window.setTimeout(() => {
             router.push("/dashboard");
             router.refresh();
@@ -43,8 +43,17 @@ export function VerifyEmailPanel() {
     <section className="auth-layout">
       <div className="auth-card">
         <p className="caption">Подтверждение email</p>
-        <h1 className="section-title">Завершение регистрации</h1>
+        <h1 className="section-title">Завершаем регистрацию</h1>
         <p className="section-text">{message}</p>
+        <div className="auth-benefits-grid">
+          <div className="auth-benefit-card">
+            <p className="caption">Статус</p>
+            <strong>
+              {state === "pending" ? "проверяем ссылку" : state === "success" ? "почта подтверждена" : "нужна новая ссылка"}
+            </strong>
+            <p className="section-text">Мы показываем только необходимый статус без лишних технических деталей.</p>
+          </div>
+        </div>
         {state === "error" ? (
           <div className="inline-actions">
             <Link className="button button-primary" href="/auth">

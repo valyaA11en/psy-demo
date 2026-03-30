@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
-import { ConsultationStatus, NotificationChannel, Prisma } from "@prisma/client";
+import { ConsultationStatus, NotificationChannel, Prisma } from "prisma-client-generated";
 import type { Request } from "express";
 import { AuditService } from "../audit/audit.service";
 import type { CreateNotificationInput } from "../notifications/interfaces/create-notification-input.interface";

@@ -1,4 +1,4 @@
-import { NotificationChannel, Prisma } from "@prisma/client";
+import { NotificationChannel, Prisma } from "prisma-client-generated";
 
 export interface CreateNotificationInput {
   userId: string;

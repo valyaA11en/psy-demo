@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from "@nestjs/swagger";
-import { AppointmentSlotStatus } from "@prisma/client";
+import { AppointmentSlotStatus } from "prisma-client-generated";
 import { Type } from "class-transformer";
 import { IsDateString, IsEnum, IsInt, IsOptional, IsString, Max, MaxLength, Min } from "class-validator";
 

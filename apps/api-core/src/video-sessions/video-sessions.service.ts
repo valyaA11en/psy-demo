@@ -1,4 +1,4 @@
-import { ConsultationStatus, PaymentStatus, Prisma } from "@prisma/client";
+import { ConsultationStatus, PaymentStatus, Prisma } from "prisma-client-generated";
 import {
   ConflictException,
   ForbiddenException,
@@ -34,6 +34,18 @@ const consultationInclude = {
       status: true,
       paidAt: true,
       createdAt: true,
+    },
+  },
+  sessionPackageUsage: {
+    select: {
+      id: true,
+      releasedAt: true,
+      sessionPackage: {
+        select: {
+          id: true,
+          title: true,
+        },
+      },
     },
   },
 } satisfies Prisma.ConsultationInclude;
@@ -83,8 +95,8 @@ export class VideoSessionsService {
       throw new ConflictException("Доступ к видеосессии разрешен только для запланированных консультаций");
     }
 
-    if (!this.hasSucceededPayment(readyConsultation)) {
-      throw new ConflictException("Для доступа к видеосессии нужна успешная оплата");
+    if (!this.hasAccessCoverage(readyConsultation)) {
+      throw new ConflictException("Для доступа к видеосессии нужна успешная оплата или активный пакет сессий");
     }
 
     const window = this.resolveAccessWindow(readyConsultation);
@@ -173,7 +185,7 @@ export class VideoSessionsService {
   }
 
   private async ensureProvisionedIfEligible(consultation: ConsultationRecord) {
-    if (!this.hasSucceededPayment(consultation)) {
+    if (!this.hasAccessCoverage(consultation)) {
       return consultation;
     }
 
@@ -207,6 +219,16 @@ export class VideoSessionsService {
     return consultation.payments.some((payment) => payment.status === PaymentStatus.succeeded);
   }
 
+  private hasActivePackageCoverage(consultation: ConsultationRecord) {
+    return Boolean(
+      consultation.sessionPackageUsage && !consultation.sessionPackageUsage.releasedAt,
+    );
+  }
+
+  private hasAccessCoverage(consultation: ConsultationRecord) {
+    return this.hasSucceededPayment(consultation) || this.hasActivePackageCoverage(consultation);
+  }
+
   private resolveAccessWindow(consultation: ConsultationRecord) {
     const startsAt = DateTime.fromJSDate(consultation.slot.startsAt, { zone: "utc" });
     const endsAt = DateTime.fromJSDate(consultation.slot.endsAt, { zone: "utc" });
@@ -220,10 +242,12 @@ export class VideoSessionsService {
   private serializeSession(consultation: ConsultationRecord, participantRole: ParticipantRole) {
     const window = this.resolveAccessWindow(consultation);
     const now = DateTime.utc();
+    const paidViaPackage = this.hasActivePackageCoverage(consultation);
     const paymentSucceeded = this.hasSucceededPayment(consultation);
+    const accessSatisfied = paymentSucceeded || paidViaPackage;
     const canRequestAccess =
       consultation.status === ConsultationStatus.scheduled &&
-      paymentSucceeded &&
+      accessSatisfied &&
       now >= window.opensAt &&
       now <= window.closesAt;
 
@@ -236,7 +260,7 @@ export class VideoSessionsService {
       scheduledAt: consultation.scheduledAt.toISOString(),
       startsAt: consultation.slot.startsAt.toISOString(),
       endsAt: consultation.slot.endsAt.toISOString(),
-      paymentStatus: paymentSucceeded ? "paid" : "payment_required",
+      paymentStatus: paidViaPackage ? "paid_via_package" : paymentSucceeded ? "paid" : "payment_required",
       joinUrl: consultation.meetingRoomId ? this.joinUrl(consultation.id) : null,
       providerConnection: {
         serverUrl: consultation.meetingProvider === "livekit" ? this.liveKitWsUrlOrNull() : null,
@@ -250,6 +274,7 @@ export class VideoSessionsService {
         requiresSucceededPayment: true,
         opensBeforeStartMinutes: PARTICIPANT_JOIN_OPEN_BEFORE_MINUTES,
         closesAfterEndMinutes: PARTICIPANT_JOIN_CLOSE_AFTER_MINUTES,
+        allowsSessionPackageCoverage: true,
       },
       canRequestAccess,
     };

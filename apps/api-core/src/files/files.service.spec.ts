@@ -3,7 +3,7 @@ import {
   BadRequestException,
   ForbiddenException,
 } from "@nestjs/common";
-import { FileStatus, FileVisibility } from "@prisma/client";
+import { FileStatus, FileVisibility } from "prisma-client-generated";
 import type { Request } from "express";
 import { AuditService } from "../audit/audit.service";
 import { PrismaService } from "../prisma/prisma.service";

@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { ConfigModule, ConfigService } from "@nestjs/config";
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from "@nestjs/core";
 import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler";
+import { AnalyticsModule } from "./analytics/analytics.module";
 import { AuthModule } from "./auth/auth.module";
 import { AvailabilityModule } from "./availability/availability.module";
 import { AuditModule } from "./audit/audit.module";
@@ -14,12 +15,16 @@ import { RolesGuard } from "./common/guards/roles.guard";
 import { ResponseEnvelopeInterceptor } from "./common/interceptors/response-envelope.interceptor";
 import { FilesModule } from "./files/files.module";
 import { HealthModule } from "./health/health.module";
+import { HomeworkTasksModule } from "./homework-tasks/homework-tasks.module";
+import { MoodEntriesModule } from "./mood-entries/mood-entries.module";
+import { MessagesModule } from "./messages/messages.module";
 import { NotificationsModule } from "./notifications/notifications.module";
 import { PaymentsModule } from "./payments/payments.module";
 import { PsychologistsModule } from "./psychologists/psychologists.module";
 import { PrismaModule } from "./prisma/prisma.module";
 import { RealtimeModule } from "./realtime/realtime.module";
 import { ReviewsModule } from "./reviews/reviews.module";
+import { SessionPackagesModule } from "./session-packages/session-packages.module";
 import { UsersModule } from "./users/users.module";
 import { VideoSessionsModule } from "./video-sessions/video-sessions.module";
 
@@ -38,7 +43,11 @@ import { VideoSessionsModule } from "./video-sessions/video-sessions.module";
     AuditModule,
     RealtimeModule,
     HealthModule,
+    AnalyticsModule,
     AuthModule,
+    HomeworkTasksModule,
+    MoodEntriesModule,
+    MessagesModule,
     NotificationsModule,
     FilesModule,
     AvailabilityModule,
@@ -47,6 +56,7 @@ import { VideoSessionsModule } from "./video-sessions/video-sessions.module";
     PaymentsModule,
     VideoSessionsModule,
     ReviewsModule,
+    SessionPackagesModule,
     UsersModule,
     CatalogModule,
     PsychologistsModule,

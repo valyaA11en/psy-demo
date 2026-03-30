@@ -6,7 +6,7 @@ import {
   Weekday,
   type AvailabilityException,
   type AvailabilityRule,
-} from "@prisma/client";
+} from "prisma-client-generated";
 import {
   BadRequestException,
   ConflictException,

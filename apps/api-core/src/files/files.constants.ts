@@ -1,4 +1,4 @@
-import { FileStatus, FileVisibility } from "@prisma/client";
+import { FileStatus, FileVisibility } from "prisma-client-generated";
 
 export const filePurposeConfigs = {
   psychologist_verification_document: {

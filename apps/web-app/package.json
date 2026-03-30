@@ -5,7 +5,7 @@
   "description": "Клиентское Next.js-приложение платформы онлайн-консультаций с психологом.",
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "node ./scripts/next-build.mjs",
     "start": "next start",
     "lint": "node -e \"console.log('Конфигурация lint будет добавлена на следующем проходе по клиентской части')\""
   },

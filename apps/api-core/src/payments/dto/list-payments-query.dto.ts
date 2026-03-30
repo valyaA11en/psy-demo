@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from "@nestjs/swagger";
-import { PaymentStatus } from "@prisma/client";
+import { PaymentStatus } from "prisma-client-generated";
 import { Type } from "class-transformer";
 import { IsEnum, IsInt, IsOptional, IsUUID, Max, Min } from "class-validator";
 
