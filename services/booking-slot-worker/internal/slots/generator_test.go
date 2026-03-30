@@ -89,3 +89,40 @@ func TestGenerateHonorsTimezone(t *testing.T) {
 		t.Fatalf("expected slot to start at 05:00 UTC, got %s", generated[0].StartsAt)
 	}
 }
+
+func TestGenerateHonorsBufferAndExceptionIntervals(t *testing.T) {
+	nowUTC := time.Date(2026, 3, 24, 6, 0, 0, 0, time.UTC)
+	dateFrom := time.Date(2026, 3, 24, 0, 0, 0, 0, time.UTC)
+	dateTo := time.Date(2026, 3, 24, 0, 0, 0, 0, time.UTC)
+
+	generated, err := Generate([]Rule{
+		{
+			Weekday:         "tuesday",
+			StartTime:       "10:00",
+			EndTime:         "13:00",
+			SlotDurationMin: 60,
+			BufferMin:       15,
+			Timezone:        "UTC",
+		},
+	}, []Interval{
+		{
+			StartsAt: time.Date(2026, 3, 24, 11, 15, 0, 0, time.UTC),
+			EndsAt:   time.Date(2026, 3, 24, 12, 15, 0, 0, time.UTC),
+		},
+	}, nowUTC, dateFrom, dateTo)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	if len(generated) != 1 {
+		t.Fatalf("expected 1 generated slot, got %d", len(generated))
+	}
+
+	if generated[0].StartsAt.Hour() != 10 || generated[0].StartsAt.Minute() != 0 {
+		t.Fatalf("expected slot at 10:00 UTC, got %s", generated[0].StartsAt)
+	}
+
+	if generated[0].EndsAt.Hour() != 11 || generated[0].EndsAt.Minute() != 0 {
+		t.Fatalf("expected slot to end at 11:00 UTC, got %s", generated[0].EndsAt)
+	}
+}
